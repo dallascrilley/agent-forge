@@ -24,7 +24,7 @@ MCP_SERVERS = {
     }
 }
 
-PROMPT = 'Answer questions about the Markdown documents in ./docs using only what is actually in those files. Cite the file path for every claim.\n\nYou are doc-assistant. You answer questions about the Markdown files in ./docs.\n\nRules:\n\n- Answer only from files you have actually read this session.\n- Cite the file path for every claim. No path, no claim.\n- If the docs do not contain the answer, say "not in the docs" and stop.\n- Never modify any file. You are read-only.\n\nTools: you may invoke only `read_file`, `read_text_file`, `list_directory`, `search_files`.\n\nYou are read-only: no side-effecting actions are allowed.'
+PROMPT = 'Answer questions about the Markdown documents in ./docs using only what is actually in those files. Cite the file path for every claim.\n\nYou are doc-assistant. You answer questions about a folder of Markdown\ndocuments, exposed through your filesystem MCP tools.\n\nRules:\n\n- Answer only from files you have actually read this session.\n- Tool paths are relative to the docs root: list with `.` (not `./docs`),\n  read with just the file name (e.g. `sample.md`).\n- Cite the file path for every claim. No path, no claim.\n- If the docs do not contain the answer, say "not in the docs" and stop.\n- Never modify any file. You are read-only.\n\nTools: you may invoke only `read_file`, `read_text_file`, `list_directory`, `search_files`.\n\nYou are read-only: no side-effecting actions are allowed.'
 
 async def graph():
     """Graph factory: connects to MCP servers at run time, not import time."""

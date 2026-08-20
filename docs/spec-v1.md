@@ -20,7 +20,7 @@ validator in `forge/spec.py` is the authority;
 | `skills` | array | no | `[{name, description, body\|file}]` — one SKILL.md dir per entry. |
 | `mcp_servers` | object | no | `{name: {command, args?, env?}}` (stdio) xor `{name: {url, headers?}}` (remote). |
 | `plugins` | array | no | `[{name, runtimes?, config?}]` — runtime-hinted freeform. Adapters ignore plugins not hinted for them. |
-| `trigger` | object | no | `{"type": "manual"}` (default) or `{"type": "cron", "schedule": "M H DoM Mon DoW"}`. |
+| `trigger` | object | no | `{"type": "manual"}` (default) or `{"type": "cron", "schedule": "M H DoM Mon DoW"}`. pi-mono translates the schedule to launchd `StartCalendarInterval` (ranges and lists become one dict per combination; `*/n` only for minute/hour). |
 | `guardrails` | object | no | See below. |
 
 ## guardrails

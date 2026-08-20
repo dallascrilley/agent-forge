@@ -198,3 +198,38 @@ def test_examples_validate_against_shipped_json_schema():
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     for name in ("sitter-spec.json", "assistant-spec.json"):
         jsonschema.validate(load_example(name), schema)
+
+
+def _assert_rejected_by_validator_and_schema(data):
+    jsonschema = pytest.importorskip(
+        "jsonschema", reason="dev dependency; validator is the authority"
+    )
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    with pytest.raises(SpecError):
+        validate(data, EXAMPLES)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, schema)
+
+
+def test_schema_and_validator_reject_cron_without_schedule():
+    data = load_example("sitter-spec.json")
+    data["trigger"] = {"type": "cron"}
+    _assert_rejected_by_validator_and_schema(data)
+
+
+def test_schema_and_validator_reject_skill_body_and_file():
+    data = load_example("assistant-spec.json")
+    data["skills"][0]["file"] = "assistant-prompt.md"
+    _assert_rejected_by_validator_and_schema(data)
+
+
+def test_schema_and_validator_reject_skill_neither_body_nor_file():
+    data = load_example("assistant-spec.json")
+    del data["skills"][0]["body"]
+    _assert_rejected_by_validator_and_schema(data)
+
+
+def test_schema_and_validator_reject_unknown_model_overrides_key():
+    data = load_example("sitter-spec.json")
+    data["model_overrides"] = {"cobol": "x"}
+    _assert_rejected_by_validator_and_schema(data)

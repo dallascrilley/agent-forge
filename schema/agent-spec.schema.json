@@ -47,15 +47,28 @@
       "type": "array",
       "description": "On-demand procedures packaged as SKILL.md directories.",
       "items": {
-        "type": "object",
-        "required": ["name", "description"],
-        "additionalProperties": false,
-        "properties": {
-          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-          "description": { "type": "string", "minLength": 1 },
-          "body": { "type": "string", "minLength": 1 },
-          "file": { "type": "string", "minLength": 1 }
-        }
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["name", "description", "body"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+              "description": { "type": "string", "minLength": 1 },
+              "body": { "type": "string", "minLength": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["name", "description", "file"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+              "description": { "type": "string", "minLength": 1 },
+              "file": { "type": "string", "minLength": 1 }
+            }
+          }
+        ]
       }
     },
     "mcp_servers": {
@@ -109,6 +122,7 @@
     },
     "model_overrides": {
       "type": "object",
+      "propertyNames": { "enum": ["pimono", "langgraph"] },
       "additionalProperties": { "type": "string", "minLength": 1 },
       "description": "Per-runtime model ids that replace model for that runtime. Use when runtimes have different native providers (e.g. openai-codex for pi-mono, openai for LangGraph)."
     },
@@ -130,7 +144,13 @@
           "description": "5-field cron expression. Required when type is cron."
         }
       },
-      "description": "How the agent is started. cron requires schedule."
+      "if": {
+        "properties": { "type": { "const": "cron" } },
+        "required": ["type"]
+      },
+      "then": { "required": ["schedule"] },
+      "else": { "not": { "required": ["schedule"] } },
+      "description": "How the agent is started. cron requires schedule; manual forbids it."
     },
     "guardrails": {
       "type": "object",

@@ -348,6 +348,36 @@ def test_missing_pi_writes_blocked_receipt(tmp_path):
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 
+def test_run_pi_scrubs_github_tokens(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps(["write-file:inbox/today.md"]))
+    env = _fake_pi(
+        tmp_path,
+        "if [ -n \"$GH_TOKEN\" ]; then echo HAS_GH_TOKEN; fi\n"
+        "if [ -n \"$GITHUB_TOKEN\" ]; then echo HAS_GITHUB_TOKEN; fi\n"
+        "echo GH_CONFIG_DIR=$GH_CONFIG_DIR\n"
+        "exit 0\n",
+    )
+    env["SITTER_ITEMS"] = str(items)
+    env["GH_TOKEN"] = "should-not-leak"
+    env["GITHUB_TOKEN"] = "should-not-leak-either"
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    log = (tmp_path / "sit.pi.log").read_text()
+    assert "HAS_GH_TOKEN" not in log
+    assert "HAS_GITHUB_TOKEN" not in log
+    assert "should-not-leak" not in log
+    assert ".sit-gh" in log
+
+
 def test_pi_nonzero_exit_writes_blocked_receipt(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     items = tmp_path / "items.json"

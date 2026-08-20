@@ -1,0 +1,11 @@
+{
+  "description": "hn-ai-sitter: Daily sitter that checks the HN front page and summarizes AI posts.",
+  "args": [
+    "--print",
+    "--no-session",
+    "--no-themes",
+    "--model",
+    "openai/gpt-5-mini",
+    "--no-skills"
+  ]
+}

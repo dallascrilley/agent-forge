@@ -1,0 +1,10 @@
+{
+  "description": "doc-assistant: Interactive assistant that answers questions about a local docs folder, with filesystem MCP access.",
+  "args": [
+    "--print",
+    "--no-session",
+    "--no-themes",
+    "--model",
+    "anthropic/claude-sonnet-4-5"
+  ]
+}

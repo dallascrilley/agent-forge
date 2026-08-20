@@ -1,0 +1,17 @@
+{
+  "name": "doc-assistant",
+  "description": "Interactive assistant that answers questions about a local docs folder, with filesystem MCP access.",
+  "model": "anthropic/claude-sonnet-4-5",
+  "trigger": {
+    "type": "manual"
+  },
+  "guardrails": {
+    "allowed_side_effects": [],
+    "receipt": {
+      "path": "receipts/doc-assistant-last.json"
+    },
+    "max_actions": 0,
+    "stop_file": "doc-assistant.stop",
+    "llm_optional": true
+  }
+}

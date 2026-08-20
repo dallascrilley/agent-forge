@@ -122,6 +122,8 @@ pip install -r requirements-dev.txt
 python3 -m pytest -q
 ```
 
+GitHub Actions runs the same suite on pull requests and on pushes to `main`.
+
 Adapter output is golden-file tested; after an intended generator change,
 re-bless with `python3 tests/bless_golden.py`.
 

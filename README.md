@@ -91,6 +91,7 @@ Every generated bundle carries the spec's `guardrails` section as *code*:
   per-run budget; enforcement is a code call site, not a prompt plea
 - **receipt** — every run ends with a JSON receipt: verdict, actions, note
 - **llm_optional** — a run with nothing to do completes without the model
+  (pi-mono cron sitters skip `pi` after an empty gather)
 
 Removing enforcement requires deleting call sites — an explicit act, not an
 omission.

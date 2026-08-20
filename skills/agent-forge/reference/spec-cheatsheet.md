@@ -40,9 +40,11 @@ Rules that bite:
 
 Runtime notes:
 
-- **pimono**: emits `harness.json`, `SYSTEM.md`, `skills/`, `mcp.json`,
-  `config.json`, `guardrails.py`, `run.sh` (`--dry-run` prints argv),
-  launchd plist when cron. Model id is passed to `pi --model` verbatim.
+- **pimono**: emits `harness.json` (isolated `pi` flags), `SYSTEM.md`,
+  `skills/`, `mcp.json`, `config.json`, `guardrails.py` (`require` CLI),
+  `run.sh` (`--dry-run` prints argv), `gatherer.py` + launchd plist when
+  cron. Cron sitters skip `pi` on an empty gather. Model id is passed to
+  `pi --model` verbatim.
 - **langgraph**: emits a minimal project (`my_agent/agent.py`,
   `langgraph.json`, `pyproject.toml`, `.env.example`, `run.py`,
   `SCHEDULING.md`). Model id `provider/model` becomes `provider:model` for

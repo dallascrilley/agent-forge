@@ -23,7 +23,7 @@ Rules:
   - `list_directory`
   - `search_files`
 - You are read-only: no side-effecting actions are allowed.
-  Perform side effects only through `guardrails.py`; never ad-hoc.
+  Perform side effects only through `python3 guardrails.py require ACTION`; never ad-hoc.
 - Action budget: at most 0 side-effecting action(s) per run.
 - Receipt: when finished, write `receipts/doc-assistant-last.json` — JSON with `verdict` ("acted"|"quiet"|"paused"|"blocked"), `actions`, `note` (one line), `ts` (unix).
 - If there is nothing to do, write a `quiet` receipt and stop without further work. Never manufacture work.

@@ -73,8 +73,12 @@ def write_receipt(verdict: str, note: str, actions: list | None = None) -> None:
 
 
 if __name__ == "__main__":
-    # CLI: guardrails.py write-receipt <verdict> <note> [action ...]
-    if len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
+    # CLI:
+    #   guardrails.py require <action>
+    #   guardrails.py write-receipt <verdict> <note> [action ...]
+    if len(sys.argv) >= 3 and sys.argv[1] == "require":
+        Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
         write_receipt(sys.argv[2], sys.argv[3], sys.argv[4:])
     else:
         print(__doc__)

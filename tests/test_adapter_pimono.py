@@ -2,6 +2,8 @@
 
 import filecmp
 import json
+import os
+import stat
 import subprocess
 from pathlib import Path
 
@@ -90,6 +92,98 @@ def test_no_skills_flag_only_when_no_skills(tmp_path):
     b = json.loads((tmp_path / "b" / "harness.json").read_text())
     assert "--no-skills" in a["args"]
     assert "--no-skills" not in b["args"]
+
+
+_ISOLATION_FLAGS = (
+    "--print",
+    "--no-session",
+    "--no-extensions",
+    "--no-prompt-templates",
+    "--no-themes",
+    "--no-context-files",
+    "--no-approve",
+)
+
+
+def _assert_isolation(args: list[str]) -> None:
+    for flag in _ISOLATION_FLAGS:
+        assert flag in args, f"missing isolation flag {flag}"
+    assert args[args.index("--thinking") + 1] == "off"
+    assert args[args.index("--tools") + 1] == "read,bash,write"
+
+
+def test_sitter_harness_is_isolated(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    args = json.loads((tmp_path / "harness.json").read_text())["args"]
+    _assert_isolation(args)
+    assert args[args.index("--model") + 1] == "openai/gpt-5-mini"
+
+
+def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
+    generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
+    args = json.loads((tmp_path / "harness.json").read_text())["args"]
+    _assert_isolation(args)
+    assert "--no-skills" not in args
+
+
+def test_cron_sitter_skips_pi_when_gather_empty(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    pi = bin_dir / "pi"
+    pi.write_text("#!/bin/sh\necho ran > \"$(dirname \"$0\")/pi.ran\"\nexit 99\n")
+    pi.chmod(pi.stat().st_mode | stat.S_IEXEC)
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert not (bin_dir / "pi.ran").exists(), "pi must not start on an empty gather"
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "quiet"
+
+
+def test_cron_sitter_dry_run_injects_brief(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh"), "--dry-run"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout
+    assert "--no-context-files" in out
+    assert "brief.md" in out
+    assert "--system-prompt" in out
+    assert "appended" in out
+
+
+def test_guardrails_require_refuses_unknown_action(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    bad = subprocess.run(
+        ["python3", "guardrails.py", "require", "post-comment"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert bad.returncode == 1
+    assert "refused" in (bad.stderr + bad.stdout)
+    good = subprocess.run(
+        ["python3", "guardrails.py", "require", "write-file:inbox/today.md"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert good.returncode == 0
 
 
 def test_guardrails_helper_runtime_behavior(tmp_path):

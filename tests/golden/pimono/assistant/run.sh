@@ -1,5 +1,5 @@
 #!/bin/bash
-# doc-assistant — manual run entrypoint.
+# doc-assistant — run entrypoint.
 # --dry-run prints the pi argv without executing.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -18,7 +18,7 @@ mapfile_args() {
 PI_ARGS=()
 while IFS= read -r line; do PI_ARGS+=("$line"); done < <(mapfile_args)
 
-CMD=(pi "${PI_ARGS[@]}" --append-system-prompt SYSTEM.md)
+CMD=(pi "${PI_ARGS[@]}" --system-prompt 'doc-assistant. Follow the appended SYSTEM.md only.' --append-system-prompt SYSTEM.md)
 
 if [ "${1:-}" = "--dry-run" ]; then
   printf '%q ' "${CMD[@]}" "${@:2}"

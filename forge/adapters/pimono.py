@@ -8,7 +8,8 @@ Output vocabulary (generalized from a proven sitting-agent pattern):
   mcp.json       standard MCP server map (only when the spec declares servers)
   config.json    name, model, trigger, guardrails — the facts guardrails.py reads
   guardrails.py  generic stop-file / allowlist / budget / receipt helper
-  run.sh         manual run entrypoint (--dry-run prints the pi argv)
+  run.sh         sit/manual entrypoint (--dry-run prints the pi argv)
+  gatherer.py    pre-LLM roster stub (cron sitters only)
   launchd/       plist template when trigger is cron
   README.md      how to run, schedule, pause
 
@@ -37,6 +38,7 @@ def generate(spec, out_dir) -> list[str]:
     e.write("guardrails.py", _GUARDRAILS_PY)
     e.write("run.sh", _run_sh(spec), executable=True)
     if spec.trigger["type"] == "cron":
+        e.write("gatherer.py", _gatherer_py(spec), executable=True)
         e.write(
             f"launchd/local.{spec.name}.plist",
             _launchd_plist(spec),
@@ -49,9 +51,25 @@ def generate(spec, out_dir) -> list[str]:
 
 
 def _harness_json(spec) -> str:
-    args = ["--print", "--no-session", "--no-themes", "--model", spec.model]
+    args = [
+        "--print",
+        "--no-session",
+        "--no-extensions",
+    ]
     if not spec.skills:
         args.append("--no-skills")
+    args += [
+        "--no-prompt-templates",
+        "--no-themes",
+        "--no-context-files",
+        "--no-approve",
+        "--tools",
+        "read,bash,write",
+        "--thinking",
+        "off",
+        "--model",
+        spec.model,
+    ]
     harness = {
         "description": f"{spec.name}: {spec.description or spec.purpose[:72]}",
         "args": args,
@@ -106,7 +124,8 @@ def _system_md(spec) -> str:
         parts.append(tool_block.rstrip("\n"))
     parts += [
         se_block,
-        "  Perform side effects only through `guardrails.py`; never ad-hoc.",
+        "  Perform side effects only through "
+        "`python3 guardrails.py require ACTION`; never ad-hoc.",
         f"- Action budget: at most {g['max_actions']} side-effecting "
         "action(s) per run.",
         f"- Receipt: when finished, write `{g['receipt']['path']}` — JSON "
@@ -115,6 +134,11 @@ def _system_md(spec) -> str:
         f"- {quiet}",
         "",
     ]
+    if spec.trigger["type"] == "cron" and g["llm_optional"]:
+        parts[-1:-1] = [
+            "- Brief: trust the pre-gathered `brief.md`. If it says "
+            "`llm: skip`, you will not be started.",
+        ]
     return "\n".join(parts)
 
 
@@ -168,8 +192,20 @@ def _config_json(spec) -> str:
 
 
 def _run_sh(spec) -> str:
+    identity = f"{spec.name}. Follow the appended SYSTEM.md only."
+    sit = spec.trigger["type"] == "cron" and spec.guardrails["llm_optional"]
+    brief_arg = " @brief.md" if sit else ""
+    gather = ""
+    if sit:
+        gather = """
+python3 gatherer.py
+if grep -q '^llm: skip' brief.md; then
+  python3 guardrails.py write-receipt quiet "nothing to do"
+  exit 0
+fi
+"""
     return f"""#!/bin/bash
-# {spec.name} — manual run entrypoint.
+# {spec.name} — run entrypoint.
 # --dry-run prints the pi argv without executing.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -188,16 +224,74 @@ mapfile_args() {{
 PI_ARGS=()
 while IFS= read -r line; do PI_ARGS+=("$line"); done < <(mapfile_args)
 
-CMD=(pi "${{PI_ARGS[@]}}" --append-system-prompt SYSTEM.md)
+CMD=(pi "${{PI_ARGS[@]}}" --system-prompt '{identity}' --append-system-prompt SYSTEM.md{brief_arg})
 
 if [ "${{1:-}}" = "--dry-run" ]; then
   printf '%q ' "${{CMD[@]}}" "${{@:2}}"
   printf '\\n'
   exit 0
 fi
-
+{gather}
 exec "${{CMD[@]}}" "$@"
 """
+
+
+def _gatherer_py(spec) -> str:
+    return '''#!/usr/bin/env python3
+"""Pre-LLM gather. Writes brief.md and allow.json. Prints llm=skip|run.
+
+Replace load_items() with the real source. Default is empty (skip the model).
+If SITTER_ITEMS points at a JSON array, that array is the roster.
+"""
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+NAME = "__AGENT_NAME__"
+
+
+def load_items() -> list:
+    fixture = os.environ.get("SITTER_ITEMS", "")
+    if not fixture:
+        return []
+    data = json.loads(Path(fixture).read_text(encoding="utf-8"))
+    return data if isinstance(data, list) else []
+
+
+def main() -> int:
+    items = load_items()
+    allowed = [i for i in items if isinstance(i, str)]
+    llm = bool(allowed)
+    lines = [
+        "# " + NAME + " brief",
+        "",
+        "llm: " + ("run" if llm else "skip"),
+        "items: " + str(len(allowed)),
+        "",
+        "## Items",
+    ]
+    if allowed:
+        lines.extend("- " + i for i in allowed)
+    else:
+        lines.append("(none)")
+    lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
+    (HERE / "brief.md").write_text("\\n".join(lines), encoding="utf-8")
+    (HERE / "allow.json").write_text(
+        json.dumps({"allowed": allowed, "ts": int(time.time())}) + "\\n",
+        encoding="utf-8",
+    )
+    print(HERE / "brief.md")
+    print("llm=" + ("run" if llm else "skip") + " allowed=" + str(len(allowed)))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''.replace("__AGENT_NAME__", spec.name)
 
 
 # --- launchd plist -----------------------------------------------------------
@@ -277,6 +371,14 @@ def _launchd_plist(spec) -> str:
 def _readme_md(spec) -> str:
     g = spec.guardrails
     cron = spec.trigger["type"] == "cron"
+    gather_docs = ""
+    if cron and g["llm_optional"]:
+        gather_docs = """
+`gatherer.py` runs before the model. An empty roster writes a quiet receipt
+and never starts pi. Point `SITTER_ITEMS` at a JSON array to inject a roster;
+replace `load_items()` with the real source.
+
+"""
     sched = ""
     if cron:
         sched = f"""
@@ -302,7 +404,7 @@ Generated by agent-forge (spec v1, runtime: pimono). Do not hand-edit
 ./run.sh --dry-run   # print the pi argv
 ./run.sh             # run one sitting
 ```
-
+{gather_docs}
 Input for the model is passed as pi arguments after `--`, e.g.
 `./run.sh -- @brief.md`.
 
@@ -400,8 +502,12 @@ def write_receipt(verdict: str, note: str, actions: list | None = None) -> None:
 
 
 if __name__ == "__main__":
-    # CLI: guardrails.py write-receipt <verdict> <note> [action ...]
-    if len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
+    # CLI:
+    #   guardrails.py require <action>
+    #   guardrails.py write-receipt <verdict> <note> [action ...]
+    if len(sys.argv) >= 3 and sys.argv[1] == "require":
+        Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
         write_receipt(sys.argv[2], sys.argv[3], sys.argv[4:])
     else:
         print(__doc__)

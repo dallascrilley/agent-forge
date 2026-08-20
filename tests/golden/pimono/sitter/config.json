@@ -1,7 +1,7 @@
 {
   "name": "hn-ai-sitter",
   "description": "Daily sitter that checks the HN front page and summarizes AI posts.",
-  "model": "openai/gpt-5-mini",
+  "model": "openai-codex/gpt-5.4-mini",
   "trigger": {
     "type": "cron",
     "schedule": "17 8 * * *"

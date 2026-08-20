@@ -20,7 +20,8 @@
     }
   },
   "plugins": [],
-  "model": "openai/gpt-5-mini",
+  "model": "openai-codex/gpt-5.4-mini",
+  "model_overrides": { "langgraph": "openai/gpt-5-mini" },
   "runtimes": ["pimono", "langgraph"],
   "trigger": { "type": "manual" },
   "guardrails": {

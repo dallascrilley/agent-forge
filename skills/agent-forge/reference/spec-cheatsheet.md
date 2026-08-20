@@ -21,6 +21,7 @@ Everything else is optional; defaults are safe.
 | `skills` | `[{name, description, body\|file}]` | `[]` |
 | `mcp_servers` | `{name: {command, args?, env?} \| {url, headers?}}` | `{}` |
 | `plugins` | `[{name, runtimes?, config?}]` | `[]` |
+| `model_overrides` | `{runtime: model-id}` | `{}` — `model` applies to all runtimes |
 | `trigger` | `{type: manual\|cron, schedule?}` | `manual` |
 | `guardrails.allowed_tools` | `[tool-name patterns]` (prefix match when ending `/`) | all tools |
 | `guardrails.allowed_side_effects` | `[action patterns]` | none (read-only) |
@@ -44,9 +45,12 @@ Runtime notes:
   `skills/`, `mcp.json`, `config.json`, `guardrails.py` (`require` CLI),
   `run.sh` (`--dry-run` prints argv), `gatherer.py` + launchd plist when
   cron. Cron sitters skip `pi` on an empty gather, take a 12-minute overlap
-  lock, and cap pi at 180s. Model id is passed to `pi --model` verbatim.
+  lock, and cap pi at 180s. Model id is passed to `pi --model` verbatim;
+  `openai-codex/...` models use Codex OAuth (no API key).
 - **langgraph**: emits a minimal project (`my_agent/agent.py`,
   `langgraph.json`, `pyproject.toml`, `.env.example`, `run.py`,
   `SCHEDULING.md`). Model id `provider/model` becomes `provider:model` for
   `init_chat_model`; the provider package is inferred into pyproject.
+  `openai-codex` has no LangChain integration — set
+  `model_overrides.langgraph` (the generator errors clearly if you forget).
   With MCP servers the graph is an async factory (run-time connect).

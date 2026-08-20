@@ -72,7 +72,7 @@ def _harness_json(spec) -> str:
         "--thinking",
         "off",
         "--model",
-        spec.model,
+        spec.model_for("pimono"),
     ]
     harness = {
         "description": f"{spec.name}: {spec.description or spec.purpose[:72]}",
@@ -184,7 +184,7 @@ def _config_json(spec) -> str:
             {
                 "name": spec.name,
                 "description": spec.description,
-                "model": spec.model,
+                "model": spec.model_for("pimono"),
                 "trigger": spec.trigger,
                 "guardrails": spec.guardrails,
             },

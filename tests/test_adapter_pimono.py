@@ -121,7 +121,7 @@ def test_sitter_harness_is_isolated(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     args = json.loads((tmp_path / "harness.json").read_text())["args"]
     _assert_isolation(args)
-    assert args[args.index("--model") + 1] == "openai/gpt-5-mini"
+    assert args[args.index("--model") + 1] == "openai-codex/gpt-5.4-mini"
 
 
 def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):

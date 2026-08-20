@@ -12,7 +12,8 @@ validator in `forge/spec.py` is the authority;
 | `spec_version` | int | yes | Must be `1`. |
 | `name` | string | yes | Kebab-case slug (`^[a-z][a-z0-9-]*$`). Used in file names, receipt defaults, scheduler labels. |
 | `purpose` | string | yes | What the agent is for, in operator language. Rendered prominently into every system prompt. |
-| `model` | string | yes | Runtime-native model id, e.g. `anthropic/claude-sonnet-4-5`. |
+| `model` | string | yes | Runtime-native model id, e.g. `openai-codex/gpt-5.4-mini`. |
+| `model_overrides` | object | no | Per-runtime model ids (`{"langgraph": "openai/gpt-5-mini"}`) that replace `model` for that runtime. Use when runtimes have different native providers — e.g. Codex OAuth (`openai-codex/…`) works in the pi CLI but has no LangChain integration. |
 | `runtimes` | array | yes | Non-empty, unique subset of `["pimono", "langgraph"]`. |
 | `description` | string | no | One-line human summary. |
 | `system_prompt` | object | no | `{"inline": "…md…"}` or `{"file": "path/rel/to/spec"}`. |

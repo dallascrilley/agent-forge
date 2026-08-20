@@ -9,7 +9,7 @@
   "skills": [],
   "mcp_servers": {},
   "plugins": [],
-  "model": "openai/gpt-5-mini",
+  "model": "openai-codex/gpt-5.4-mini",
   "runtimes": ["pimono"],
   "trigger": { "type": "cron", "schedule": "17 8 * * *" },
   "guardrails": {

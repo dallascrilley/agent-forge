@@ -139,7 +139,14 @@ def test_mcp_extension_wiring_only_when_servers(tmp_path):
     assert b_args[b_args.index("--extension") + 1] == "mcp.ts"
     assert "--no-extensions" in b_args
     assert (assistant / "mcp.ts").is_file()
-    assert "registerTool" in (assistant / "mcp.ts").read_text()
+    mcp_ts = (assistant / "mcp.ts").read_text()
+    assert "registerTool" in mcp_ts
+    assert mcp_ts.index("requireTool(tool.name)") < mcp_ts.index(
+        'client.call("tools/call"'
+    )
+    assert "text.includes(\"data:\")" not in mcp_ts
+    assert "clients.push(client)" in mcp_ts
+    assert "client.close()" in mcp_ts
     tools = b_args[b_args.index("--tools") + 1].split(",")
     assert tools[0] == "read"
     for name in ("read_file", "read_text_file", "list_directory", "search_files"):

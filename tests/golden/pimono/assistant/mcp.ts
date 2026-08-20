@@ -142,12 +142,20 @@ class HttpClient {
     const sid = res.headers.get("mcp-session-id");
     if (sid) this.sessionId = sid;
     const text = await res.text();
-    if (text.includes("data:")) {
+    if (!res.ok) {
+      throw new Error("mcp http " + res.status + " " + text.slice(0, 200));
+    }
+    const ctype = (res.headers.get("content-type") || "").toLowerCase();
+    const sse =
+      ctype.includes("text/event-stream") || /^\s*(event:|data:)/m.test(text);
+    if (sse) {
       const data = text
         .split("\n")
         .filter((l) => l.startsWith("data:"))
         .map((l) => l.slice(5).trim())
-        .join("");
+        .filter(Boolean)
+        .join("\n");
+      if (!data) throw new Error("mcp empty sse");
       return JSON.parse(data) as RpcReply;
     }
     return text ? (JSON.parse(text) as RpcReply) : {};
@@ -185,11 +193,15 @@ async function handshake(client: Client) {
 export default async function (pi: ExtensionAPI) {
   const cwd = process.cwd();
   const clients: Client[] = [];
+  pi.on("session_shutdown", () => {
+    for (const c of clients) c.close();
+  });
   for (const [name, cfg] of Object.entries(loadServers())) {
+    const client: Client = cfg.command
+      ? new StdioClient(cfg, cwd)
+      : new HttpClient(cfg);
+    clients.push(client);
     try {
-      const client: Client = cfg.command
-        ? new StdioClient(cfg, cwd)
-        : new HttpClient(cfg);
       await handshake(client);
       let cursor: string | undefined;
       do {
@@ -226,18 +238,18 @@ export default async function (pi: ExtensionAPI) {
                   },
                 ],
                 details: { server: name, isError: !!result.isError },
+                isError: !!result.isError,
               };
             },
           });
         }
         cursor = listed.nextCursor;
       } while (cursor);
-      clients.push(client);
     } catch (err) {
-      console.error("mcp " + name + ":", err);
+      client.close();
+      const i = clients.indexOf(client);
+      if (i >= 0) clients.splice(i, 1);
+      throw err;
     }
   }
-  pi.on("session_shutdown", () => {
-    for (const c of clients) c.close();
-  });
 }

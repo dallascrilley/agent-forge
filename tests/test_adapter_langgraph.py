@@ -39,6 +39,29 @@ def test_golden_tree(tmp_path):
     )
 
 
+def test_skills_emitted_from_assistant_spec(tmp_path):
+    spec = load(EXAMPLES / "assistant-spec.json")
+    generate(spec, tmp_path)
+    skill = tmp_path / "skills" / "summarize-doc" / "SKILL.md"
+    text = skill.read_text()
+    assert "summarize-doc" in text
+    assert "five bullets" in text
+    prompt = (tmp_path / "my_agent" / "agent.py").read_text()
+    assert "summarize-doc" in prompt
+    assert "skills/summarize-doc/SKILL.md" in prompt
+
+
+def test_empty_skills_emit_no_skill_files(tmp_path):
+    data = json.loads((EXAMPLES / "assistant-spec.json").read_text())
+    data["skills"] = []
+    from forge.spec import validate
+
+    spec = validate(data, EXAMPLES)
+    generate(spec, tmp_path)
+    assert not (tmp_path / "skills").exists()
+    assert "Skills:" not in (tmp_path / "my_agent" / "agent.py").read_text()
+
+
 def test_mcp_block_present_iff_servers(tmp_path):
     assistant = load(EXAMPLES / "assistant-spec.json")
     generate(assistant, tmp_path / "with")

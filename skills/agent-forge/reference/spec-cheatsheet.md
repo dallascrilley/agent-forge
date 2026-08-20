@@ -51,7 +51,8 @@ Runtime notes:
   `openai-codex/...` models use Codex OAuth (no API key).
 - **langgraph**: emits a minimal project (`my_agent/agent.py`,
   `langgraph.json`, `pyproject.toml`, `.env.example`, `run.py`,
-  `SCHEDULING.md`). Model id `provider/model` becomes `provider:model` for
+  `SCHEDULING.md`, `skills/<name>/SKILL.md` when the spec declares skills,
+  listed by name/description in the system prompt). Model id `provider/model` becomes `provider:model` for
   `init_chat_model`; the provider package is inferred into pyproject.
   `openai-codex` has no LangChain integration — set
   `model_overrides.langgraph` (the generator errors clearly if you forget).

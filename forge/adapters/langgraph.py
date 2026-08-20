@@ -14,6 +14,7 @@ Output vocabulary (idiomatic per the LangGraph application-structure docs):
   SCHEDULING.md           cron options without LangSmith (system cron, launchd,
                           GitHub Actions)
   config.json             spec facts the guardrails helper reads
+  skills/<name>/SKILL.md  spec skills on disk (no native LangGraph skill loader)
 
 Deliberately minimal: a plain `graph` variable (no factory), no LangGraph
 Platform / LangSmith dependency anywhere in the output.
@@ -53,6 +54,8 @@ def generate(spec, out_dir) -> list[str]:
     e.write("run.py", _run_py(spec))
     e.write("SCHEDULING.md", _scheduling_md(spec))
     e.write("config.json", _config_json(spec))
+    for skill in spec.skills:
+        e.write(f"skills/{skill['name']}/SKILL.md", _skill_md(skill, spec))
     e.write("README.md", _readme_md(spec))
     return e.written
 
@@ -66,6 +69,12 @@ def _prompt_text(spec) -> str:
     if extra:
         parts.append(extra)
     g = spec.guardrails
+    if spec.skills:
+        listed = "\n".join(
+            f"- `{s['name']}`: {s['description']} (see skills/{s['name']}/SKILL.md)"
+            for s in spec.skills
+        )
+        parts.append("Skills:\n" + listed)
     tools = g.get("allowed_tools")
     if tools:
         allow_t = ", ".join(f"`{t}`" for t in tools)
@@ -141,6 +150,20 @@ from .guardrails import GUARDRAILS
 PROMPT = {prompt!r}
 
 {graph_def.format(tools_expr=tools_expr)}'''
+
+
+def _skill_md(skill, spec) -> str:
+    if "body" in skill:
+        body = skill["body"].strip()
+    else:
+        body = (spec.spec_dir / skill["file"]).read_text(encoding="utf-8").strip()
+    return (
+        "---\n"
+        f"name: {skill['name']}\n"
+        f"description: {skill['description']}\n"
+        "---\n\n"
+        f"{body}\n"
+    )
 
 
 # --- guardrails.py (emitted verbatim) --------------------------------------
@@ -413,6 +436,10 @@ langgraph dev                    # local dev server with the graph UI
 ## Receipts
 
 Every run writes `{g['receipt']['path']}` (verdict, actions, note, ts).
+
+## Skills
+
+{"Spec skills are in `skills/<name>/SKILL.md` and listed in the system prompt. LangGraph has no native skill loader." if spec.skills else "This agent declares no skills."}
 
 ## Scheduling
 

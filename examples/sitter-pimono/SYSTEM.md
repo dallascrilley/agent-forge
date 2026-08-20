@@ -13,7 +13,7 @@ Pick the posts whose title is about AI/ML. Write a summary of at most three line
 - Stop file: if `hn-ai-sitter.stop` exists, do nothing; write a `paused` receipt and exit.
 - You may perform only these side-effecting actions:
   - `write-file:inbox/`
-  Perform side effects only through `python3 guardrails.py require ACTION`; never ad-hoc.
+  Write files only through `python3 guardrails.py put RELPATH` (stdin is the body). Other side effects: `python3 guardrails.py require ACTION`. Never ad-hoc.
 - Action budget: at most 1 side-effecting action(s) per run.
 - Receipt: when finished, write `receipts/last.json` — JSON with `verdict` ("acted"|"quiet"|"paused"|"blocked"), `actions`, `note` (one line), `ts` (unix).
 - If there is nothing to do, write a `quiet` receipt and stop without further work. Never manufacture work.

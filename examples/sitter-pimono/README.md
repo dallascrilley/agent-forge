@@ -20,6 +20,8 @@ A second sit while `hn-ai-sitter.lock` is younger than 12 minutes exits without
 starting pi. A sit that exceeds 180s writes a `blocked` receipt and logs
 argv to `sit.pi.log`. Override with `SIT_LOCK_SEC` / `SIT_TIMEOUT_SEC`.
 
+Writes go through `python3 guardrails.py put RELPATH` (stdin is the body).
+
 
 Input for the model is passed as pi arguments after `--`, e.g.
 `./run.sh -- @brief.md`.

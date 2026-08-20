@@ -1,15 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from cron schedule "17 8 * * *".
-     Replace __INSTALL_DIR__ with this bundle's absolute path before installing. -->
+     Replace __INSTALL_DIR__ with this bundle's absolute path before installing.
+     PATH is a launchd string (no shell expansion). Add pi's directory if missing. -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>local.hn-ai-sitter</string>
+  <key>WorkingDirectory</key>
+  <string>__INSTALL_DIR__</string>
   <key>ProgramArguments</key>
   <array>
     <string>__INSTALL_DIR__/run.sh</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Minute</key>

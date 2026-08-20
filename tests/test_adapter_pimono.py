@@ -60,6 +60,19 @@ def test_cron_trigger_emits_plist(tmp_path):
     assert "gatherer.py" in written
 
 
+def test_plist_sets_working_directory_and_path(tmp_path):
+    spec = load(EXAMPLES / "sitter-spec.json")
+    generate(spec, tmp_path)
+    text = (tmp_path / f"launchd/local.{spec.name}.plist").read_text()
+    assert "<key>WorkingDirectory</key>" in text
+    assert "<string>__INSTALL_DIR__</string>" in text
+    assert "<key>EnvironmentVariables</key>" in text
+    assert "<key>PATH</key>" in text
+    assert "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" in text
+    assert "$HOME" not in text
+    assert "~" not in text
+
+
 def test_manual_trigger_omits_plist(tmp_path):
     spec = load(EXAMPLES / "assistant-spec.json")
     written = generate(spec, tmp_path)
@@ -110,18 +123,19 @@ _ISOLATION_FLAGS = (
 )
 
 
-def _assert_isolation(args: list[str]) -> None:
+def _assert_isolation(args: list[str], tools: str) -> None:
     for flag in _ISOLATION_FLAGS:
         assert flag in args, f"missing isolation flag {flag}"
     assert args[args.index("--thinking") + 1] == "off"
-    assert args[args.index("--tools") + 1] == "read,bash,write"
+    assert args[args.index("--tools") + 1] == tools
 
 
 def test_sitter_harness_is_isolated(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     args = json.loads((tmp_path / "harness.json").read_text())["args"]
-    _assert_isolation(args)
+    _assert_isolation(args, "read,bash")
     assert args[args.index("--model") + 1] == "openai-codex/gpt-5.4-mini"
+    assert "write" not in args[args.index("--tools") + 1].split(",")
 
 
 def test_harness_uses_pimono_model_override(tmp_path):
@@ -137,8 +151,9 @@ def test_harness_uses_pimono_model_override(tmp_path):
 def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
     args = json.loads((tmp_path / "harness.json").read_text())["args"]
-    _assert_isolation(args)
+    _assert_isolation(args, "read")
     assert "--no-skills" not in args
+    assert args[args.index("--tools") + 1] == "read"
 
 
 @pytest.mark.parametrize("spec_name", ["sitter-spec.json", "assistant-spec.json"])
@@ -348,6 +363,60 @@ def test_cron_sitter_dry_run_injects_brief(tmp_path):
     assert "brief.md" in out
     assert "--system-prompt" in out
     assert "appended" in out
+
+
+def test_system_md_points_sitters_at_put(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    text = (tmp_path / "SYSTEM.md").read_text()
+    assert "guardrails.py put" in text
+    assistant = tmp_path / "assistant"
+    generate(load(EXAMPLES / "assistant-spec.json"), assistant)
+    assert "guardrails.py put" not in (assistant / "SYSTEM.md").read_text()
+
+
+def test_put_writes_allowlisted_path(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    (tmp_path / "allow.json").write_text(
+        json.dumps({"allowed": ["write-file:inbox/today.md"], "ts": 0})
+    )
+    proc = subprocess.run(
+        ["python3", "guardrails.py", "put", "inbox/today.md"],
+        cwd=tmp_path,
+        input="hello\n",
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert (tmp_path / "inbox" / "today.md").read_text() == "hello\n"
+
+
+def test_put_refuses_unknown_and_escape(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    (tmp_path / "allow.json").write_text(
+        json.dumps({"allowed": ["write-file:inbox/today.md"], "ts": 0})
+    )
+    unknown = subprocess.run(
+        ["python3", "guardrails.py", "put", "inbox/other.md"],
+        cwd=tmp_path,
+        input="nope\n",
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert unknown.returncode == 1
+    assert "refused" in (unknown.stderr + unknown.stdout)
+    assert not (tmp_path / "inbox" / "other.md").exists()
+    escape = subprocess.run(
+        ["python3", "guardrails.py", "put", "../outside.md"],
+        cwd=tmp_path,
+        input="nope\n",
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert escape.returncode == 1
+    assert "refused" in (escape.stderr + escape.stdout)
 
 
 def test_guardrails_require_refuses_unknown_action(tmp_path):

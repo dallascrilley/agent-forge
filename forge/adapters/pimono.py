@@ -54,6 +54,15 @@ def generate(spec, out_dir) -> list[str]:
 # --- harness -------------------------------------------------------------
 
 
+def _pi_tools(spec) -> str:
+    g = spec.guardrails
+    if not g["allowed_side_effects"] or g["max_actions"] == 0:
+        return "read"
+    if _is_sit(spec):
+        return "read,bash"
+    return "read,bash,write"
+
+
 def _harness_json(spec) -> str:
     args = [
         "--print",
@@ -68,7 +77,7 @@ def _harness_json(spec) -> str:
         "--no-context-files",
         "--no-approve",
         "--tools",
-        "read,bash,write",
+        _pi_tools(spec),
         "--thinking",
         "off",
         "--model",
@@ -126,10 +135,21 @@ def _system_md(spec) -> str:
     ]
     if tool_block:
         parts.append(tool_block.rstrip("\n"))
+    if _is_sit(spec):
+        se_how = (
+            "  Write files only through "
+            "`python3 guardrails.py put RELPATH` (stdin is the body). "
+            "Other side effects: `python3 guardrails.py require ACTION`. "
+            "Never ad-hoc."
+        )
+    else:
+        se_how = (
+            "  Perform side effects only through "
+            "`python3 guardrails.py require ACTION`; never ad-hoc."
+        )
     parts += [
         se_block,
-        "  Perform side effects only through "
-        "`python3 guardrails.py require ACTION`; never ad-hoc.",
+        se_how,
         f"- Action budget: at most {g['max_actions']} side-effecting "
         "action(s) per run.",
         f"- Receipt: when finished, write `{g['receipt']['path']}` — JSON "
@@ -382,16 +402,24 @@ def _launchd_plist(spec) -> str:
     )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from cron schedule "{spec.trigger['schedule']}".
-     Replace __INSTALL_DIR__ with this bundle's absolute path before installing. -->
+     Replace __INSTALL_DIR__ with this bundle's absolute path before installing.
+     PATH is a launchd string (no shell expansion). Add pi's directory if missing. -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>local.{spec.name}</string>
+  <key>WorkingDirectory</key>
+  <string>__INSTALL_DIR__</string>
   <key>ProgramArguments</key>
   <array>
     <string>__INSTALL_DIR__/run.sh</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
   <key>StartCalendarInterval</key>
   <dict>
 {cal_lines}  </dict>
@@ -422,6 +450,8 @@ replace `load_items()` with the real source.
 A second sit while `{name}.lock` is younger than 12 minutes exits without
 starting pi. A sit that exceeds 180s writes a `blocked` receipt and logs
 argv to `sit.pi.log`. Override with `SIT_LOCK_SEC` / `SIT_TIMEOUT_SEC`.
+
+Writes go through `python3 guardrails.py put RELPATH` (stdin is the body).
 
 """.replace("{name}", spec.name)
     sched = ""
@@ -479,6 +509,7 @@ Reads config.json (guardrails section) from the bundle directory:
 - stopped()          stop-file check; a present stop file pauses the agent
 - allow(action)      allowlist + per-run budget check
 - require(action)    allow() or exit 1
+- put RELPATH        require write-file:RELPATH, then stdin → file
 - write_receipt()    append the run receipt JSON
 - lock-acquire/drop  overlap lock for cron sitters
 - run-pi             argv-logged pi launch with timeout
@@ -560,6 +591,24 @@ class Budget:
             raise SystemExit(f"guardrails: refused action {action!r}")
 
 
+def put(relpath: str) -> None:
+    """Write stdin to a bundle-relative path after require('write-file:…')."""
+    if (
+        not relpath
+        or relpath.startswith("/")
+        or ".." in Path(relpath).parts
+    ):
+        raise SystemExit(f"guardrails: refused path {relpath!r}")
+    dest = (HERE / relpath).resolve()
+    try:
+        dest.relative_to(HERE.resolve())
+    except ValueError:
+        raise SystemExit(f"guardrails: refused path {relpath!r}")
+    Budget().require("write-file:" + relpath)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(sys.stdin.buffer.read())
+
+
 def allow(action: str) -> bool:
     """Budgetless allowlist check (for pre-flight questions)."""
     return any(
@@ -637,11 +686,14 @@ def run_pi(argv: list, log_path) -> int:
 if __name__ == "__main__":
     # CLI:
     #   guardrails.py require <action>
+    #   guardrails.py put <relpath>   (stdin → file)
     #   guardrails.py write-receipt <verdict> <note> [action ...]
     #   guardrails.py lock-acquire | lock-drop
     #   guardrails.py run-pi <log> -- <argv...>
     if len(sys.argv) >= 3 and sys.argv[1] == "require":
         Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "put":
+        put(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
         write_receipt(sys.argv[2], sys.argv[3], sys.argv[4:])
     elif len(sys.argv) >= 2 and sys.argv[1] == "lock-acquire":

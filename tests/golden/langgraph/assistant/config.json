@@ -1,7 +1,7 @@
 {
   "name": "doc-assistant",
   "description": "Interactive assistant that answers questions about a local docs folder, with filesystem MCP access.",
-  "model": "anthropic/claude-sonnet-4-5",
+  "model": "openai/gpt-5-mini",
   "trigger": {
     "type": "manual"
   },

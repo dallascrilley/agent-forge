@@ -20,7 +20,7 @@
     }
   },
   "plugins": [],
-  "model": "anthropic/claude-sonnet-4-5",
+  "model": "openai/gpt-5-mini",
   "runtimes": ["pimono", "langgraph"],
   "trigger": { "type": "manual" },
   "guardrails": {

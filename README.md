@@ -23,11 +23,12 @@ bundle in ~1s; clone → LangGraph bundle → `pip install -e .` → live graph
 build against a real MCP server in ~15s warm cache (a cold dependency
 install adds a few minutes — still far under the 30-minute MVP gate).
 
-Live-run verified 2026-08-20: the generated pi-mono sitter ran a real
-sitting (read a pre-fetched brief, stayed inside its allowlisted side
-effect, wrote its receipt); the generated LangGraph assistant answered from
-a real filesystem MCP server with citations, and its guardrails wrapper
-mechanically refused a non-allowlisted `write_file` call.
+Live-run verified 2026-08-20 with both committed example specs verbatim:
+the generated pi-mono sitter ran a real sitting on its declared model (read
+a pre-fetched HN brief, stayed inside its allowlisted side effect, wrote its
+receipt); the generated LangGraph assistant answered from a real filesystem
+MCP server with citations, its receipt mechanically recording every tool
+call, and its guardrails wrapper refused a non-allowlisted `write_file`.
 
 ## Why not `langgraph new` / `npx eve init` / Oracle's Agent Spec?
 

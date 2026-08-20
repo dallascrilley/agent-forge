@@ -30,5 +30,5 @@ async def graph():
     """Graph factory: connects to MCP servers at run time, not import time."""
     client = MultiServerMCPClient(MCP_SERVERS)
     tools = [GUARDRAILS.wrap(t) for t in await client.get_tools()]
-    model = init_chat_model('anthropic:claude-sonnet-4-5')
+    model = init_chat_model('openai:gpt-5-mini')
     return create_agent(model=model, tools=tools, system_prompt=PROMPT)

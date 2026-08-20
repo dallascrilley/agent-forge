@@ -166,6 +166,8 @@ class Guardrails:
     def __init__(self):
         self.used = 0
         self.actions: list[str] = []
+        self.tool_calls: list[str] = []
+        self.refused: list[str] = []
 
     def stopped(self) -> bool:
         return (HERE / G["stop_file"]).exists()
@@ -200,7 +202,9 @@ class Guardrails:
         async def _guarded(**kwargs):
             refusal = self.check(tool.name)
             if refusal is not None:
+                self.refused.append(tool.name)
                 return refusal
+            self.tool_calls.append(tool.name)
             if any(
                 _matches(p, tool.name) for p in G["allowed_side_effects"]
             ):
@@ -218,6 +222,8 @@ class Guardrails:
         receipt = {
             "verdict": verdict,
             "actions": self.actions,
+            "tool_calls": self.tool_calls,
+            "refused": self.refused,
             "note": note,
             "ts": int(time.time()),
         }

@@ -40,11 +40,19 @@ Every run of a generated agent ends with one JSON receipt:
 ```json
 {
   "verdict": "acted | quiet | paused | blocked",
-  "actions": ["…"],
+  "actions": ["write-file:inbox/today.md"],
+  "tool_calls": ["list_directory", "read_file"],
+  "refused": ["write_file"],
   "note": "one line",
   "ts": 1787174525
 }
 ```
+
+- `actions` — side-effecting actions taken (allowlisted, budgeted).
+- `tool_calls` / `refused` — every tool invocation and every guardrails
+  refusal. Recorded **mechanically** by runtimes that wrap tools (LangGraph).
+  pi-mono receipts are model-reported via `guardrails.py write-receipt` and
+  carry `verdict`/`actions`/`note`/`ts`.
 
 ## Validation rules that bite
 

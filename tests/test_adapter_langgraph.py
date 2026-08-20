@@ -96,7 +96,7 @@ def test_provider_package_inferred(tmp_path):
     spec = load(EXAMPLES / "assistant-spec.json")
     generate(spec, tmp_path)
     toml = (tmp_path / "pyproject.toml").read_text()
-    assert "langchain-anthropic" in toml  # from model "anthropic/..."
+    assert "langchain-openai" in toml  # from model "openai/..."
 
 
 def test_no_langsmith_in_output(tmp_path):

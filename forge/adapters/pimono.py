@@ -248,7 +248,7 @@ python3 guardrails.py run-pi sit.pi.log -- "${CMD[@]}" "$@"
 """
     else:
         launch = """
-exec "${CMD[@]}" "$@"
+SIT_TIMEOUT_SEC=0 python3 guardrails.py run-pi sit.pi.log -- "${CMD[@]}" "$@"
 """
     return f"""#!/bin/bash
 # {spec.name} — run entrypoint.
@@ -721,27 +721,34 @@ def run_pi(argv: list, log_path) -> int:
     if not log.is_absolute():
         log = HERE / log
     log.parent.mkdir(parents=True, exist_ok=True)
-    with log.open("w", encoding="utf-8") as logf:
-        logf.write(" ".join(str(a) for a in argv) + "\\n\\n")
-        logf.flush()
-        try:
-            proc = subprocess.run(
-                argv,
-                timeout=timeout_sec,
-                cwd=str(HERE),
-                stdout=logf,
-                stderr=subprocess.STDOUT,
-            )
-        except FileNotFoundError:
-            write_receipt("blocked", "pi not on PATH")
-            return 1
-        except subprocess.TimeoutExpired:
+    header = " ".join(str(a) for a in argv) + "\\n\\n"
+    capture = timeout_sec > 0
+    try:
+        if capture:
+            with log.open("w", encoding="utf-8") as logf:
+                logf.write(header)
+                logf.flush()
+                proc = subprocess.run(
+                    argv,
+                    timeout=timeout_sec,
+                    cwd=str(HERE),
+                    stdout=logf,
+                    stderr=subprocess.STDOUT,
+                )
+        else:
+            log.write_text(header, encoding="utf-8")
+            proc = subprocess.run(argv, cwd=str(HERE))
+    except FileNotFoundError:
+        write_receipt("blocked", "pi not on PATH")
+        return 1
+    except subprocess.TimeoutExpired:
+        with log.open("a", encoding="utf-8") as logf:
             logf.write("\\nblocked: pi timed out after %ss\\n" % timeout_sec)
-            write_receipt("blocked", "pi timed out after %ss" % timeout_sec)
-            return 1
-        if proc.returncode != 0:
-            write_receipt("blocked", "pi exited %s" % proc.returncode)
-        return proc.returncode
+        write_receipt("blocked", "pi timed out after %ss" % timeout_sec)
+        return 1
+    if proc.returncode != 0:
+        write_receipt("blocked", "pi exited %s" % proc.returncode)
+    return proc.returncode
 
 
 if __name__ == "__main__":

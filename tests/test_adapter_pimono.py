@@ -157,6 +157,34 @@ def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     assert args[args.index("--tools") + 1] == "read"
 
 
+def test_assistant_run_sh_uses_run_pi_without_timeout(tmp_path):
+    generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
+    run_sh = (tmp_path / "run.sh").read_text()
+    assert "run-pi" in run_sh
+    assert "SIT_TIMEOUT_SEC=0" in run_sh
+    assert 'exec "${CMD[@]}"' not in run_sh
+
+
+def test_assistant_nonzero_exit_writes_blocked_receipt(tmp_path):
+    generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
+    env = _fake_pi(tmp_path, "echo visible\nexit 7\n")
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 7
+    assert "visible" in proc.stdout
+    receipt = json.loads(
+        (tmp_path / "receipts" / "doc-assistant-last.json").read_text()
+    )
+    assert receipt["verdict"] == "blocked"
+    assert "7" in receipt["note"]
+
+
 @pytest.mark.parametrize("spec_name", ["sitter-spec.json", "assistant-spec.json"])
 def test_system_md_treats_brief_as_untrusted(tmp_path, spec_name):
     generate(load(EXAMPLES / spec_name), tmp_path)

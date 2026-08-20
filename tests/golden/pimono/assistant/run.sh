@@ -26,4 +26,4 @@ if [ "${1:-}" = "--dry-run" ]; then
   exit 0
 fi
 
-exec "${CMD[@]}" "$@"
+SIT_TIMEOUT_SEC=0 python3 guardrails.py run-pi sit.pi.log -- "${CMD[@]}" "$@"

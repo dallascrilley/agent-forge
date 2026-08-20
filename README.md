@@ -101,7 +101,8 @@ omission.
 
 v1 reference: [`docs/spec-v1.md`](docs/spec-v1.md). Machine-readable schema:
 [`schema/agent-spec.schema.json`](schema/agent-spec.schema.json). Examples:
-[`examples/`](examples/).
+[`examples/`](examples/). `examples/sitter-pimono/` is generated from
+`examples/sitter-spec.json`; after adapter changes, regenerate it.
 
 ## Runtimes
 

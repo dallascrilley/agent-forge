@@ -64,15 +64,22 @@ def _harness_json(spec) -> str:
 
 def _system_md(spec) -> str:
     g = spec.guardrails
+    tools = g.get("allowed_tools")
     side_effects = g["allowed_side_effects"]
+    tool_block = ""
+    if tools:
+        t_lines = "\n".join(f"  - `{t}`" for t in tools)
+        tool_block = (
+            "- Tools: you may invoke only these:\n" + t_lines + "\n"
+        )
     if side_effects:
         se_lines = "\n".join(f"  - `{a}`" for a in side_effects)
         se_block = (
-            "You may perform only these side-effecting actions:\n" + se_lines
+            "- You may perform only these side-effecting actions:\n" + se_lines
         )
     else:
         se_block = (
-            "You are read-only: no side-effecting actions are allowed."
+            "- You are read-only: no side-effecting actions are allowed."
         )
     quiet = (
         "If there is nothing to do, write a `quiet` receipt and stop without "
@@ -94,7 +101,11 @@ def _system_md(spec) -> str:
         "",
         f"- Stop file: if `{g['stop_file']}` exists, do nothing; write a "
         "`paused` receipt and exit.",
-        f"- {se_block}",
+    ]
+    if tool_block:
+        parts.append(tool_block.rstrip("\n"))
+    parts += [
+        se_block,
         "  Perform side effects only through `guardrails.py`; never ad-hoc.",
         f"- Action budget: at most {g['max_actions']} side-effecting "
         "action(s) per run.",

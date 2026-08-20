@@ -237,6 +237,9 @@ def validate(data, spec_dir: Path) -> Spec:
         ase = guardrails.get("allowed_side_effects", [])
         if not (isinstance(ase, list) and all(isinstance(a, str) for a in ase)):
             err("$.guardrails.allowed_side_effects", "must be an array of strings")
+        at = guardrails.get("allowed_tools", [])
+        if not (isinstance(at, list) and all(isinstance(a, str) for a in at)):
+            err("$.guardrails.allowed_tools", "must be an array of strings")
         if "stop_file" in guardrails and not isinstance(
             guardrails["stop_file"], str
         ):

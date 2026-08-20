@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "doc-assistant": "./my_agent/agent.py:graph"
+  },
+  "env": "./.env"
+}

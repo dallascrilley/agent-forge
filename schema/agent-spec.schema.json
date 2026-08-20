@@ -132,6 +132,11 @@
       "additionalProperties": false,
       "description": "Safety contract every adapter must emit enforcement for. Omitted fields take the safe defaults documented in docs/spec-v1.md.",
       "properties": {
+        "allowed_tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tool names the agent may invoke at all (exact, or prefix when ending in '/'). Default: all tools allowed. For LangGraph adapters, list the MCP tool names the agent needs (e.g. read_file)."
+        },
         "allowed_side_effects": {
           "type": "array",
           "items": { "type": "string" },

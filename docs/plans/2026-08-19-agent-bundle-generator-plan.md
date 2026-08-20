@@ -31,10 +31,17 @@ MVP gate: spec-to-running-agent ≤30 min on a fresh machine for both adapters.
 - **pi-mono adapter** emits the generalized harness vocabulary: `harness.json`,
   `SYSTEM.md`, `skills/`, `mcp.json` (or a NOTE when unsupported), `config.json`,
   `guardrails.py` (fresh generic code), `run.sh`, launchd plist on cron triggers.
-- **LangGraph adapter** emits minimal-runnable: single-file `create_agent`
-  graph, `MultiServerMCPClient` only when MCP servers exist, `langgraph.json`,
+- **LangGraph adapter** emits minimal-runnable: `create_agent` graph,
+  `MultiServerMCPClient` only when MCP servers exist, `langgraph.json`,
   `pyproject.toml`, `.env.example`, `run.py`, `SCHEDULING.md` (no LangSmith
-  dependency — system cron / launchd / GH Actions instead).
+  dependency — system cron / launchd / GH Actions instead). Deviation from
+  the original "plain graph variable, never a factory" decision: with MCP
+  servers the graph is an **async factory** (`async def graph()`) because a
+  module-level `MultiServerMCPClient.get_tools()` connects at import time —
+  verified failing on 2026-08-19. Specs without MCP still get a plain
+  variable. langchain 1.x `create_agent` takes `system_prompt=`, and the
+  model provider package (`langchain-anthropic`, …) is inferred into
+  pyproject from the model prefix.
 - **Guardrails are generated code call sites**, not prose: adapters emit a
   guardrails helper the agent code imports; tests assert the call site exists.
 - **Skill lives in-repo** at `skills/agent-forge/`; registry publication deferred.

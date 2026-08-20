@@ -14,6 +14,11 @@ Rules:
 ## Operating contract (guardrails — enforced by guardrails.py)
 
 - Stop file: if `doc-assistant.stop` exists, do nothing; write a `paused` receipt and exit.
+- Tools: you may invoke only these:
+  - `read_file`
+  - `read_text_file`
+  - `list_directory`
+  - `search_files`
 - You are read-only: no side-effecting actions are allowed.
   Perform side effects only through `guardrails.py`; never ad-hoc.
 - Action budget: at most 0 side-effecting action(s) per run.

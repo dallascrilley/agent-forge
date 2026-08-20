@@ -24,6 +24,7 @@
   "runtimes": ["pimono", "langgraph"],
   "trigger": { "type": "manual" },
   "guardrails": {
+    "allowed_tools": ["read_file", "read_text_file", "list_directory", "search_files"],
     "allowed_side_effects": [],
     "receipt": { "path": "receipts/doc-assistant-last.json" },
     "max_actions": 0

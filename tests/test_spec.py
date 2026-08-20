@@ -153,6 +153,12 @@ def test_rejects_bool_max_actions():
     assert any("max_actions" in p for p in problems_of(data))
 
 
+def test_rejects_bad_allowed_tools():
+    data = load_example("assistant-spec.json")
+    data["guardrails"]["allowed_tools"] = "read_file"
+    assert any("allowed_tools" in p for p in problems_of(data))
+
+
 def test_collects_multiple_problems():
     data = load_example("sitter-spec.json")
     data["name"] = "BAD"

@@ -1,0 +1,31 @@
+{
+  "spec_version": 1,
+  "name": "doc-assistant",
+  "description": "Interactive assistant that answers questions about a local docs folder, with filesystem MCP access.",
+  "purpose": "Answer questions about the Markdown documents in ./docs using only what is actually in those files. Cite the file path for every claim.",
+  "system_prompt": {
+    "file": "assistant-prompt.md"
+  },
+  "skills": [
+    {
+      "name": "summarize-doc",
+      "description": "Summarize one document into five bullets with citations.",
+      "body": "# summarize-doc\n\nGiven a path under ./docs:\n\n1. Read the file.\n2. Produce exactly five bullets, each ending with `(line N)`.\n3. If the file is empty, say so and stop."
+    }
+  ],
+  "mcp_servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./docs"]
+    }
+  },
+  "plugins": [],
+  "model": "anthropic/claude-sonnet-4-5",
+  "runtimes": ["pimono", "langgraph"],
+  "trigger": { "type": "manual" },
+  "guardrails": {
+    "allowed_side_effects": [],
+    "receipt": { "path": "receipts/doc-assistant-last.json" },
+    "max_actions": 0
+  }
+}

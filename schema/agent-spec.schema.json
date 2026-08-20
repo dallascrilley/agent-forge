@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/agent-spec.schema.json",
+  "title": "Agent Forge Spec",
+  "description": "Canonical declaration of a self-contained agent: harness/runtime config, system prompt, skills, MCP servers, plugins, trigger, and guardrails. Versioned via spec_version.",
+  "type": "object",
+  "required": ["spec_version", "name", "purpose", "model", "runtimes"],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Spec schema version. Must be 1."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Kebab-case agent slug. Used for file names, receipt defaults, and scheduler labels."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line human summary of the agent."
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the agent is for, in operator language. Adapters render this prominently into the system prompt."
+    },
+    "system_prompt": {
+      "description": "The agent's standing instructions. Inline Markdown or a file reference relative to the spec.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["inline"],
+          "additionalProperties": false,
+          "properties": { "inline": { "type": "string", "minLength": 1 } }
+        },
+        {
+          "type": "object",
+          "required": ["file"],
+          "additionalProperties": false,
+          "properties": { "file": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "skills": {
+      "type": "array",
+      "description": "On-demand procedures packaged as SKILL.md directories.",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "description": { "type": "string", "minLength": 1 },
+          "body": { "type": "string", "minLength": 1 },
+          "file": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "mcp_servers": {
+      "type": "object",
+      "description": "MCP servers the agent may use. Stdio servers declare command/args/env; remote servers declare url.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["command"],
+            "additionalProperties": false,
+            "properties": {
+              "command": { "type": "string", "minLength": 1 },
+              "args": { "type": "array", "items": { "type": "string" } },
+              "env": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["url"],
+            "additionalProperties": false,
+            "properties": {
+              "url": { "type": "string", "minLength": 1 },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          }
+        ]
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "description": "Runtime-specific extras, hinted with the runtimes they apply to. Freeform config; adapters ignore plugins not hinted for them.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "runtimes": {
+            "type": "array",
+            "items": { "enum": ["pimono", "langgraph"] }
+          },
+          "config": { "type": "object" }
+        }
+      }
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Model identifier in the target runtime's native form (e.g. provider/model)."
+    },
+    "runtimes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["pimono", "langgraph"] },
+      "description": "Runtimes this spec targets. Each listed runtime must have an installed adapter at generation time."
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["manual", "cron"] },
+        "schedule": {
+          "type": "string",
+          "description": "5-field cron expression. Required when type is cron."
+        }
+      },
+      "description": "How the agent is started. cron requires schedule."
+    },
+    "guardrails": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Safety contract every adapter must emit enforcement for. Omitted fields take the safe defaults documented in docs/spec-v1.md.",
+      "properties": {
+        "allowed_side_effects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Side-effect action names the agent may perform (e.g. 'send-message', 'write-file:inbox/'). Default: none."
+        },
+        "stop_file": {
+          "type": "string",
+          "description": "Path whose existence pauses the agent. Default: <name>.stop."
+        },
+        "receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string", "description": "Where the run receipt is written. Default: receipts/last.json." }
+          }
+        },
+        "llm_optional": {
+          "type": "boolean",
+          "description": "When true, a run with nothing to do must complete without invoking the model. Default: true."
+        },
+        "max_actions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cap on side-effecting actions per run. Default: 3."
+        }
+      }
+    }
+  }
+}

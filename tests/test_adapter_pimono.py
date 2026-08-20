@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from forge.adapters.pimono import _cron_to_calendar_interval, generate
+from forge.errors import AdapterError
 from forge.spec import load
 
 REPO = Path(__file__).resolve().parent.parent
@@ -483,23 +484,74 @@ def test_guardrails_helper_runtime_behavior(tmp_path):
 
 
 def test_cron_simple():
-    assert _cron_to_calendar_interval("17 8 * * *") == {"Minute": 17, "Hour": 8}
+    assert _cron_to_calendar_interval("17 8 * * *") == [
+        {"Minute": 17, "Hour": 8}
+    ]
 
 
 def test_cron_step_minutes():
-    assert _cron_to_calendar_interval("*/15 * * * *") == {
-        "Minute": [0, 15, 30, 45]
-    }
+    assert _cron_to_calendar_interval("*/15 * * * *") == [
+        {"Minute": 0},
+        {"Minute": 15},
+        {"Minute": 30},
+        {"Minute": 45},
+    ]
+
+
+def test_cron_weekday_range():
+    got = _cron_to_calendar_interval("0 9 * * 1-5")
+    assert [d["Weekday"] for d in got] == [1, 2, 3, 4, 5]
+    assert all(d["Minute"] == 0 and d["Hour"] == 9 for d in got)
 
 
 def test_cron_weekday_7_is_sunday_0():
-    assert _cron_to_calendar_interval("0 9 * * 7")["Weekday"] == 0
+    assert _cron_to_calendar_interval("0 9 * * 7") == [
+        {"Minute": 0, "Hour": 9, "Weekday": 0}
+    ]
 
 
 def test_cron_day_of_month():
-    assert _cron_to_calendar_interval("0 9 1 * *")["Day"] == 1
+    assert _cron_to_calendar_interval("0 9 1 * *") == [
+        {"Minute": 0, "Hour": 9, "Day": 1}
+    ]
 
 
 def test_cron_step_rejected_for_day():
     with pytest.raises(ValueError):
         _cron_to_calendar_interval("0 0 */2 * *")
+
+
+def test_cron_named_dow_rejected():
+    with pytest.raises(ValueError):
+        _cron_to_calendar_interval("0 9 * * MON")
+
+
+def test_plist_step_minutes_is_array_of_dicts(tmp_path):
+    spec = load(EXAMPLES / "sitter-spec.json")
+    spec.trigger = {"type": "cron", "schedule": "*/15 * * * *"}
+    generate(spec, tmp_path)
+    text = (tmp_path / f"launchd/local.{spec.name}.plist").read_text()
+    assert "<key>StartCalendarInterval</key>" in text
+    assert text.count("<key>Minute</key>") == 4
+    assert "<integer>15</integer>" in text
+    minute_arrays = text.split("<key>Minute</key>")
+    for chunk in minute_arrays[1:]:
+        head = chunk.lstrip()[:20]
+        assert head.startswith("<integer>"), head
+
+
+def test_generate_weekday_range(tmp_path):
+    spec = load(EXAMPLES / "sitter-spec.json")
+    spec.trigger = {"type": "cron", "schedule": "0 9 * * 1-5"}
+    generate(spec, tmp_path)
+    text = (tmp_path / f"launchd/local.{spec.name}.plist").read_text()
+    assert text.count("<key>Weekday</key>") == 5
+    assert "<integer>1</integer>" in text
+    assert "<integer>5</integer>" in text
+
+
+def test_generate_day_step_is_adapter_error(tmp_path):
+    spec = load(EXAMPLES / "sitter-spec.json")
+    spec.trigger = {"type": "cron", "schedule": "0 0 */2 * *"}
+    with pytest.raises(AdapterError):
+        generate(spec, tmp_path)

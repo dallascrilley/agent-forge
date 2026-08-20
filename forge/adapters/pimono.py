@@ -20,7 +20,9 @@ its generator's environment.
 from __future__ import annotations
 
 import json
+from itertools import product
 
+from ..errors import AdapterError
 from .common import Emitter
 
 
@@ -43,10 +45,11 @@ def generate(spec, out_dir) -> list[str]:
     if _is_sit(spec):
         e.write("gatherer.py", _gatherer_py(spec), executable=True)
     if spec.trigger["type"] == "cron":
-        e.write(
-            f"launchd/local.{spec.name}.plist",
-            _launchd_plist(spec),
-        )
+        try:
+            plist = _launchd_plist(spec)
+        except ValueError as exc:
+            raise AdapterError(str(exc)) from exc
+        e.write(f"launchd/local.{spec.name}.plist", plist)
     e.write("README.md", _readme_md(spec))
     return e.written
 
@@ -358,48 +361,104 @@ if __name__ == "__main__":
 # --- launchd plist -----------------------------------------------------------
 
 _CRON_FIELD_TO_PLIST_KEYS = ["Minute", "Hour", "Day", "Month", "Weekday"]
+_CRON_BOUNDS = {
+    "Minute": (0, 59),
+    "Hour": (0, 23),
+    "Day": (1, 31),
+    "Month": (1, 12),
+    "Weekday": (0, 7),
+}
+_MAX_LAUNCHD_INTERVALS = 60
 
 
-def _cron_to_calendar_interval(schedule: str) -> dict:
-    """Translate a 5-field cron expression to launchd StartCalendarInterval.
+def _parse_cron_field(value: str, key: str, schedule: str) -> list[int] | None:
+    """None means unconstrained (*). Cron weekday 7 maps to launchd 0."""
+    if value == "*":
+        return None
+    if value.startswith("*/"):
+        if key not in ("Minute", "Hour"):
+            raise ValueError(
+                f"*/n steps are only supported for minute/hour: {schedule!r}"
+            )
+        try:
+            step = int(value[2:])
+        except ValueError:
+            raise ValueError(
+                f"unsupported cron field {value!r} in {schedule!r}"
+            ) from None
+        if step < 1:
+            raise ValueError(f"invalid step in {schedule!r}")
+        limit = 60 if key == "Minute" else 24
+        vals = list(range(0, limit, step))
+    else:
+        vals = []
+        for part in value.split(","):
+            try:
+                if "-" in part:
+                    a, b = part.split("-", 1)
+                    start, end = int(a), int(b)
+                else:
+                    start = end = int(part)
+            except ValueError:
+                raise ValueError(
+                    f"unsupported cron field {value!r} in {schedule!r}"
+                ) from None
+            if start > end:
+                raise ValueError(f"invalid range in {schedule!r}")
+            vals.extend(range(start, end + 1))
+    lo, hi = _CRON_BOUNDS[key]
+    if any(v < lo or v > hi for v in vals):
+        raise ValueError(f"cron field {key} out of range in {schedule!r}")
+    if key == "Weekday":
+        vals = [0 if v == 7 else v for v in vals]
+    return vals
 
-    Supports '*', single ints, '*/n' (minute/hour only), and comma lists.
-    Cron weekday 7 maps to launchd 0 (Sunday).
+
+def _cron_to_calendar_interval(schedule: str) -> list[dict]:
+    """Translate a 5-field cron to launchd StartCalendarInterval dicts.
+
+    Supports '*', ints, 'a-b' ranges, comma lists, and '*/n' (minute/hour).
+    Multiple values become an array of one-integer dicts — launchd does not
+    accept an array of integers under a single key.
     """
     fields = schedule.split()
-    out = {}
-    for value, key in zip(fields, _CRON_FIELD_TO_PLIST_KEYS):
-        if value == "*":
-            continue
-        if value.startswith("*/"):
-            if key not in ("Minute", "Hour"):
-                raise ValueError(
-                    f"*/n steps are only supported for minute/hour: {schedule!r}"
-                )
-            step = int(value[2:])
-            limit = 60 if key == "Minute" else 24
-            out[key] = list(range(0, limit, step))
-            continue
-        vals = [int(v) for v in value.split(",")]
-        if key == "Weekday":
-            vals = [0 if v == 7 else v for v in vals]
-        out[key] = vals[0] if len(vals) == 1 else vals
-    return out
+    if len(fields) != 5:
+        raise ValueError(f"expected 5-field cron, got {schedule!r}")
+    parsed = [
+        (key, _parse_cron_field(value, key, schedule))
+        for value, key in zip(fields, _CRON_FIELD_TO_PLIST_KEYS)
+    ]
+    constrained = [(k, vs) for k, vs in parsed if vs is not None]
+    if not constrained:
+        return [{}]
+    keys = [k for k, _ in constrained]
+    combos = list(product(*(vs for _, vs in constrained)))
+    if len(combos) > _MAX_LAUNCHD_INTERVALS:
+        raise ValueError(
+            f"cron expands to {len(combos)} launchd intervals "
+            f"(max {_MAX_LAUNCHD_INTERVALS}): {schedule!r}"
+        )
+    return [dict(zip(keys, combo)) for combo in combos]
 
 
-def _plist_value(v) -> str:
-    if isinstance(v, list):
-        items = "".join(f"    <integer>{x}</integer>\n" for x in v)
-        return f"<array>\n{items}  </array>"
-    return f"<integer>{v}</integer>"
+def _interval_xml(interval: dict, indent: int) -> str:
+    pad = " " * indent
+    if not interval:
+        return f"{pad}<dict/>"
+    inner = "".join(
+        f"{pad}  <key>{k}</key>\n{pad}  <integer>{v}</integer>\n"
+        for k, v in interval.items()
+    )
+    return f"{pad}<dict>\n{inner}{pad}</dict>"
 
 
 def _launchd_plist(spec) -> str:
-    interval = _cron_to_calendar_interval(spec.trigger["schedule"])
-    cal_lines = "".join(
-        f"    <key>{k}</key>\n    {_plist_value(v)}\n"
-        for k, v in interval.items()
-    )
+    intervals = _cron_to_calendar_interval(spec.trigger["schedule"])
+    if len(intervals) == 1:
+        cal = _interval_xml(intervals[0], 2)
+    else:
+        inner = "\n".join(_interval_xml(i, 4) for i in intervals)
+        cal = f"  <array>\n{inner}\n  </array>"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from cron schedule "{spec.trigger['schedule']}".
      Replace __INSTALL_DIR__ with this bundle's absolute path before installing.
@@ -421,8 +480,7 @@ def _launchd_plist(spec) -> str:
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
   <key>StartCalendarInterval</key>
-  <dict>
-{cal_lines}  </dict>
+{cal}
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>

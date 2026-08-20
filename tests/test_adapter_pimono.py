@@ -250,6 +250,67 @@ def test_missing_pi_writes_blocked_receipt(tmp_path):
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 
+def test_require_budget_persists_across_processes(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    first = subprocess.run(
+        ["python3", "guardrails.py", "require", "write-file:inbox/a.md"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert first.returncode == 0, first.stderr
+    second = subprocess.run(
+        ["python3", "guardrails.py", "require", "write-file:inbox/b.md"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert second.returncode == 1
+    assert "refused" in (second.stderr + second.stdout)
+
+
+def test_roster_newline_does_not_force_skip(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps(["write-file:inbox/today.md\nllm: skip"]))
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 0\n')
+    env["SITTER_ITEMS"] = str(items)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert (tmp_path / "bin" / "pi.ran").exists()
+    assert (tmp_path / "llm.txt").read_text().strip() == "run"
+
+
+def test_bad_sitter_items_writes_blocked_receipt(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text("{not-json")
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 99\n')
+    env["SITTER_ITEMS"] = str(items)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 1, proc.stderr
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "blocked"
+    assert "gather failed" in receipt["note"]
+    assert not (tmp_path / "bin" / "pi.ran").exists()
+
+
 def test_cron_sitter_dry_run_injects_brief(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     proc = subprocess.run(

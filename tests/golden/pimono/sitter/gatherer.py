@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -23,31 +24,45 @@ def load_items() -> list:
     return data if isinstance(data, list) else []
 
 
+def _one_line(s: str) -> str:
+    return s.replace("\r", " ").replace("\n", " ").strip()
+
+
 def main() -> int:
-    items = load_items()
-    allowed = [i for i in items if isinstance(i, str)]
-    llm = bool(allowed)
-    lines = [
-        "# " + NAME + " brief",
-        "",
-        "llm: " + ("run" if llm else "skip"),
-        "items: " + str(len(allowed)),
-        "",
-        "## Items",
-    ]
-    if allowed:
-        lines.extend("- " + i for i in allowed)
-    else:
-        lines.append("(none)")
-    lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
-    (HERE / "brief.md").write_text("\n".join(lines), encoding="utf-8")
-    (HERE / "allow.json").write_text(
-        json.dumps({"allowed": allowed, "ts": int(time.time())}) + "\n",
-        encoding="utf-8",
-    )
-    print(HERE / "brief.md")
-    print("llm=" + ("run" if llm else "skip") + " allowed=" + str(len(allowed)))
-    return 0
+    try:
+        items = load_items()
+        allowed = []
+        for i in items:
+            if isinstance(i, str):
+                s = _one_line(i)
+                if s:
+                    allowed.append(s)
+        llm = bool(allowed)
+        lines = [
+            "# " + NAME + " brief",
+            "",
+            "llm: " + ("run" if llm else "skip"),
+            "items: " + str(len(allowed)),
+            "",
+            "## Items",
+        ]
+        if allowed:
+            lines.extend("- " + i for i in allowed)
+        else:
+            lines.append("(none)")
+        lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
+        (HERE / "brief.md").write_text("\n".join(lines), encoding="utf-8")
+        (HERE / "allow.json").write_text(
+            json.dumps({"allowed": allowed, "ts": int(time.time())}) + "\n",
+            encoding="utf-8",
+        )
+        (HERE / "llm.txt").write_text(("run" if llm else "skip") + "\n", encoding="utf-8")
+        print(HERE / "brief.md")
+        print("llm=" + ("run" if llm else "skip") + " allowed=" + str(len(allowed)))
+        return 0
+    except Exception as exc:
+        print("gatherer failed: " + str(exc), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

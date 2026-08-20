@@ -212,8 +212,11 @@ if [ "$lock_rc" -ne 0 ]; then
 fi
 trap 'python3 guardrails.py lock-drop' EXIT
 
-python3 gatherer.py
-if grep -q '^llm: skip' brief.md; then
+if ! python3 gatherer.py; then
+  python3 guardrails.py write-receipt blocked "gather failed"
+  exit 1
+fi
+if [ "$(tr -d '\\n' < llm.txt)" = "skip" ]; then
   python3 guardrails.py write-receipt quiet "nothing to do"
   exit 0
 fi
@@ -265,6 +268,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -280,31 +284,45 @@ def load_items() -> list:
     return data if isinstance(data, list) else []
 
 
+def _one_line(s: str) -> str:
+    return s.replace("\\r", " ").replace("\\n", " ").strip()
+
+
 def main() -> int:
-    items = load_items()
-    allowed = [i for i in items if isinstance(i, str)]
-    llm = bool(allowed)
-    lines = [
-        "# " + NAME + " brief",
-        "",
-        "llm: " + ("run" if llm else "skip"),
-        "items: " + str(len(allowed)),
-        "",
-        "## Items",
-    ]
-    if allowed:
-        lines.extend("- " + i for i in allowed)
-    else:
-        lines.append("(none)")
-    lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
-    (HERE / "brief.md").write_text("\\n".join(lines), encoding="utf-8")
-    (HERE / "allow.json").write_text(
-        json.dumps({"allowed": allowed, "ts": int(time.time())}) + "\\n",
-        encoding="utf-8",
-    )
-    print(HERE / "brief.md")
-    print("llm=" + ("run" if llm else "skip") + " allowed=" + str(len(allowed)))
-    return 0
+    try:
+        items = load_items()
+        allowed = []
+        for i in items:
+            if isinstance(i, str):
+                s = _one_line(i)
+                if s:
+                    allowed.append(s)
+        llm = bool(allowed)
+        lines = [
+            "# " + NAME + " brief",
+            "",
+            "llm: " + ("run" if llm else "skip"),
+            "items: " + str(len(allowed)),
+            "",
+            "## Items",
+        ]
+        if allowed:
+            lines.extend("- " + i for i in allowed)
+        else:
+            lines.append("(none)")
+        lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
+        (HERE / "brief.md").write_text("\\n".join(lines), encoding="utf-8")
+        (HERE / "allow.json").write_text(
+            json.dumps({"allowed": allowed, "ts": int(time.time())}) + "\\n",
+            encoding="utf-8",
+        )
+        (HERE / "llm.txt").write_text(("run" if llm else "skip") + "\\n", encoding="utf-8")
+        print(HERE / "brief.md")
+        print("llm=" + ("run" if llm else "skip") + " allowed=" + str(len(allowed)))
+        return 0
+    except Exception as exc:
+        print("gatherer failed: " + str(exc), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
@@ -477,6 +495,7 @@ HERE = Path(__file__).resolve().parent
 _CONFIG = json.loads((HERE / "config.json").read_text(encoding="utf-8"))
 GUARDRAILS = _CONFIG["guardrails"]
 LOCK_PATH = HERE / (_CONFIG["name"] + ".lock")
+BUDGET_PATH = HERE / ".sit-budget"
 
 
 def stopped() -> bool:
@@ -505,10 +524,18 @@ def _this_run_allows(action: str) -> bool:
 
 
 class Budget:
-    """Per-run side-effect budget. Instantiate once per run."""
+    """Per-run side-effect budget. Count persists in .sit-budget so each
+    `require` subprocess shares the same cap."""
 
     def __init__(self):
         self.used = 0
+        try:
+            self.used = int(BUDGET_PATH.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            self.used = 0
+
+    def _save(self) -> None:
+        BUDGET_PATH.write_text(str(self.used), encoding="utf-8")
 
     def allow(self, action: str) -> bool:
         allowed = any(
@@ -516,6 +543,7 @@ class Budget:
         )
         if allowed and _this_run_allows(action) and self.used < GUARDRAILS["max_actions"]:
             self.used += 1
+            self._save()
             return True
         return False
 
@@ -556,12 +584,17 @@ def lock_acquire() -> int:
     if LOCK_PATH.exists() and time.time() - LOCK_PATH.stat().st_mtime < fresh:
         return 2
     LOCK_PATH.write_text(str(int(time.time())), encoding="utf-8")
+    BUDGET_PATH.write_text("0", encoding="utf-8")
     return 0
 
 
 def lock_drop() -> None:
     try:
         LOCK_PATH.unlink()
+    except FileNotFoundError:
+        pass
+    try:
+        BUDGET_PATH.unlink()
     except FileNotFoundError:
         pass
 

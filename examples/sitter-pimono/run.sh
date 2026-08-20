@@ -35,8 +35,11 @@ if [ "$lock_rc" -ne 0 ]; then
 fi
 trap 'python3 guardrails.py lock-drop' EXIT
 
-python3 gatherer.py
-if grep -q '^llm: skip' brief.md; then
+if ! python3 gatherer.py; then
+  python3 guardrails.py write-receipt blocked "gather failed"
+  exit 1
+fi
+if [ "$(tr -d '\n' < llm.txt)" = "skip" ]; then
   python3 guardrails.py write-receipt quiet "nothing to do"
   exit 0
 fi

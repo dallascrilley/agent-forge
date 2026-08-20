@@ -61,9 +61,12 @@ class Budget:
     def __init__(self):
         self.used = 0
         try:
-            self.used = int(BUDGET_PATH.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
+            n = int(BUDGET_PATH.read_text(encoding="utf-8").strip())
+            self.used = n if n >= 0 else GUARDRAILS["max_actions"]
+        except OSError:
             self.used = 0
+        except ValueError:
+            self.used = GUARDRAILS["max_actions"]
 
     def _save(self) -> None:
         BUDGET_PATH.write_text(str(self.used), encoding="utf-8")

@@ -24,8 +24,10 @@ def load_items() -> list:
     return data if isinstance(data, list) else []
 
 
-def _one_line(s: str) -> str:
-    return s.replace("\r", " ").replace("\n", " ").strip()
+def _first_line(s: str) -> str:
+    return (
+        s.replace("\r\n", "\n").replace("\r", "\n").split("\n", 1)[0].strip()
+    )
 
 
 def main() -> int:
@@ -34,7 +36,7 @@ def main() -> int:
         allowed = []
         for i in items:
             if isinstance(i, str):
-                s = _one_line(i)
+                s = _first_line(i)
                 if s:
                     allowed.append(s)
         llm = bool(allowed)

@@ -271,6 +271,20 @@ def test_require_budget_persists_across_processes(tmp_path):
     assert "refused" in (second.stderr + second.stdout)
 
 
+def test_negative_budget_file_refuses(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    (tmp_path / ".sit-budget").write_text("-1")
+    proc = subprocess.run(
+        ["python3", "guardrails.py", "require", "write-file:inbox/a.md"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 1, proc.stderr
+    assert "refused" in (proc.stderr + proc.stdout)
+
+
 def test_roster_newline_does_not_force_skip(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     items = tmp_path / "items.json"
@@ -288,6 +302,8 @@ def test_roster_newline_does_not_force_skip(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert (tmp_path / "bin" / "pi.ran").exists()
     assert (tmp_path / "llm.txt").read_text().strip() == "run"
+    allow = json.loads((tmp_path / "allow.json").read_text())
+    assert allow["allowed"] == ["write-file:inbox/today.md"]
 
 
 def test_bad_sitter_items_writes_blocked_receipt(tmp_path):

@@ -124,6 +124,16 @@ def test_sitter_harness_is_isolated(tmp_path):
     assert args[args.index("--model") + 1] == "openai-codex/gpt-5.4-mini"
 
 
+def test_harness_uses_pimono_model_override(tmp_path):
+    spec = load(EXAMPLES / "sitter-spec.json")
+    spec.model_overrides = {"pimono": "openai/gpt-5-mini"}
+    generate(spec, tmp_path)
+    args = json.loads((tmp_path / "harness.json").read_text())["args"]
+    assert args[args.index("--model") + 1] == "openai/gpt-5-mini"
+    config = json.loads((tmp_path / "config.json").read_text())
+    assert config["model"] == "openai/gpt-5-mini"
+
+
 def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
     args = json.loads((tmp_path / "harness.json").read_text())["args"]

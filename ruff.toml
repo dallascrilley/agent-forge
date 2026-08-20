@@ -1,0 +1,5 @@
+target-version = "py310"
+extend-exclude = ["tests/golden"]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

@@ -330,7 +330,7 @@ OPENAI_API_KEY=
 
 
 def _run_py(spec) -> str:
-    return f'''"""Manual run: python3 run.py "your input"  (or pipe input on stdin)."""
+    return '''"""Manual run: python3 run.py "your input"  (or pipe input on stdin)."""
 
 import asyncio
 import sys
@@ -349,7 +349,7 @@ async def main() -> None:
         return
     g = await graph() if callable(graph) else graph
     result = await g.ainvoke(
-        {{"messages": [{{"role": "user", "content": text}}]}}
+        {"messages": [{"role": "user", "content": text}]}
     )
     last = result["messages"][-1]
     print(last.content)

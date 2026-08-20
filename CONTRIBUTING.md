@@ -20,6 +20,7 @@ runtime dependencies. Dev dependencies (pytest, jsonschema) are fine.
 ```bash
 pip install -r requirements-dev.txt
 python3 -m pytest -q
+ruff check forge tests
 ```
 
 ## Adding a runtime

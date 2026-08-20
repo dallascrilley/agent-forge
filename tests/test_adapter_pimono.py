@@ -220,6 +220,60 @@ def test_cron_sitter_skips_pi_when_gather_empty(tmp_path):
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 
+def test_parked_roster_skips_pi(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps([
+        {"id": "write-file:inbox/today.md", "sendable": False},
+    ]))
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 99\n')
+    env["SITTER_ITEMS"] = str(items)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert not (tmp_path / "bin" / "pi.ran").exists()
+    assert (tmp_path / "llm.txt").read_text().strip() == "skip"
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "quiet"
+    allow = json.loads((tmp_path / "allow.json").read_text())
+    assert allow["allowed"] == []
+
+
+def test_mixed_roster_allows_only_sendable(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps([
+        {"id": "write-file:inbox/today.md", "sendable": True},
+        {"id": "write-file:inbox/parked.md", "sendable": False},
+        "write-file:inbox/also.md",
+    ]))
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 0\n')
+    env["SITTER_ITEMS"] = str(items)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert (tmp_path / "bin" / "pi.ran").exists()
+    allow = json.loads((tmp_path / "allow.json").read_text())
+    assert allow["allowed"] == [
+        "write-file:inbox/today.md",
+        "write-file:inbox/also.md",
+    ]
+    brief = (tmp_path / "brief.md").read_text()
+    assert "write-file:inbox/parked.md" in brief
+
+
 def test_overlap_lock_skips_pi(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     (tmp_path / "hn-ai-sitter.lock").write_text("held")

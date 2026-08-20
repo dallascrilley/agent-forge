@@ -3,6 +3,7 @@
 import filecmp
 import json
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -204,6 +205,37 @@ def test_pi_timeout_writes_blocked_receipt(tmp_path):
     log = (tmp_path / "sit.pi.log").read_text()
     assert log.startswith("pi ")
     assert "timed out" in log
+    assert not (tmp_path / "hn-ai-sitter.lock").exists()
+
+
+def test_missing_pi_writes_blocked_receipt(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps(["write-file:inbox/today.md"]))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    py = shutil.which("python3")
+    assert py, "python3 must exist to run this test"
+    os.symlink(py, bin_dir / "python3")
+    path = f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin"
+    assert shutil.which("pi", path=path) is None
+    env = {
+        **os.environ,
+        "PATH": path,
+        "SITTER_ITEMS": str(items),
+    }
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 1
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "blocked"
+    assert "not on PATH" in receipt["note"]
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 

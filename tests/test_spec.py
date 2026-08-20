@@ -159,6 +159,21 @@ def test_rejects_bad_allowed_tools():
     assert any("allowed_tools" in p for p in problems_of(data))
 
 
+def test_model_overrides_resolve_per_runtime():
+    spec = load(EXAMPLES / "assistant-spec.json")
+    assert spec.model == "openai-codex/gpt-5.4-mini"
+    assert spec.model_for("pimono") == "openai-codex/gpt-5.4-mini"
+    assert spec.model_for("langgraph") == "openai/gpt-5-mini"
+
+
+def test_rejects_bad_model_overrides():
+    data = load_example("sitter-spec.json")
+    data["model_overrides"] = {"cobol": "x", "langgraph": "  "}
+    probs = problems_of(data)
+    assert any("cobol" in p for p in probs)
+    assert any("non-empty" in p for p in probs)
+
+
 def test_collects_multiple_problems():
     data = load_example("sitter-spec.json")
     data["name"] = "BAD"

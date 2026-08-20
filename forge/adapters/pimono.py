@@ -49,7 +49,7 @@ def generate(spec, out_dir) -> list[str]:
 
 
 def _harness_json(spec) -> str:
-    args = ["--print", "--no-session", "--no-themes", "--model", spec.model]
+    args = ["--print", "--no-session", "--no-themes", "--model", spec.model_for("pimono")]
     if not spec.skills:
         args.append("--no-skills")
     harness = {
@@ -154,7 +154,7 @@ def _config_json(spec) -> str:
             {
                 "name": spec.name,
                 "description": spec.description,
-                "model": spec.model,
+                "model": spec.model_for("pimono"),
                 "trigger": spec.trigger,
                 "guardrails": spec.guardrails,
             },

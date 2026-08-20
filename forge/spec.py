@@ -21,7 +21,8 @@ _CRON_RE = re.compile(r"^\S+( \S+){4}$")
 
 _TOP_KEYS = {
     "spec_version", "name", "description", "purpose", "system_prompt",
-    "skills", "mcp_servers", "plugins", "model", "runtimes", "trigger",
+    "skills", "mcp_servers", "plugins", "model", "model_overrides",
+    "runtimes", "trigger",
     "guardrails",
 }
 
@@ -39,9 +40,14 @@ class Spec:
     skills: list[dict] = field(default_factory=list)
     mcp_servers: dict = field(default_factory=dict)
     plugins: list[dict] = field(default_factory=list)
+    model_overrides: dict = field(default_factory=dict)
     trigger: dict = field(default_factory=lambda: {"type": "manual"})
     guardrails: dict = field(default_factory=dict)
     spec_dir: Path = field(default_factory=Path)
+
+    def model_for(self, runtime: str) -> str:
+        """The model id for a runtime: per-runtime override, else spec.model."""
+        return self.model_overrides.get(runtime, self.model)
 
     def __post_init__(self):
         g = self.guardrails
@@ -100,6 +106,20 @@ def validate(data, spec_dir: Path) -> Spec:
     # description
     if "description" in data and not isinstance(data["description"], str):
         err("$.description", "must be a string")
+
+    # model_overrides
+    overrides = data.get("model_overrides", {})
+    if not isinstance(overrides, dict):
+        err("$.model_overrides", "must be an object of runtime -> model id")
+    else:
+        for rt, mid in overrides.items():
+            if rt not in KNOWN_RUNTIMES:
+                err(
+                    f"$.model_overrides.{rt}",
+                    f"unknown runtime {rt!r}; known: {', '.join(KNOWN_RUNTIMES)}",
+                )
+            if not isinstance(mid, str) or not mid.strip():
+                err(f"$.model_overrides.{rt}", "model id must be a non-empty string")
 
     # runtimes
     runtimes = data.get("runtimes")
@@ -270,6 +290,7 @@ def validate(data, spec_dir: Path) -> Spec:
         skills=list(data.get("skills", [])),
         mcp_servers=dict(data.get("mcp_servers", {})),
         plugins=list(data.get("plugins", [])),
+        model_overrides=dict(data.get("model_overrides", {})),
         trigger=dict(data.get("trigger", {"type": "manual"})),
         guardrails=dict(data.get("guardrails", {})),
         spec_dir=spec_dir,

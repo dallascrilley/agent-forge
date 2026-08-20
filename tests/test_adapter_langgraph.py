@@ -49,6 +49,7 @@ def test_mcp_block_present_iff_servers(tmp_path):
 
     sitter_data = json.loads((EXAMPLES / "sitter-spec.json").read_text())
     sitter_data["runtimes"] = ["langgraph"]
+    sitter_data["model_overrides"] = {"langgraph": "openai/gpt-5-mini"}
     from forge.spec import validate
 
     sitter = validate(sitter_data, EXAMPLES)
@@ -97,6 +98,24 @@ def test_provider_package_inferred(tmp_path):
     generate(spec, tmp_path)
     toml = (tmp_path / "pyproject.toml").read_text()
     assert "langchain-openai" in toml  # from model "openai/..."
+
+
+def test_codex_model_without_override_errors(tmp_path):
+    import json as _json
+
+    from forge.errors import AdapterError
+
+    data = _json.loads((EXAMPLES / "assistant-spec.json").read_text())
+    del data["model_overrides"]
+    data["runtimes"] = ["langgraph"]
+    from forge.spec import validate
+
+    spec = validate(data, EXAMPLES)
+    try:
+        generate(spec, tmp_path)
+        raise AssertionError("expected AdapterError")
+    except AdapterError as e:
+        assert "model_overrides" in str(e)
 
 
 def test_no_langsmith_in_output(tmp_path):

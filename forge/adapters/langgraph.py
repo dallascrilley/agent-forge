@@ -35,6 +35,14 @@ def _langchain_model_id(model: str) -> str:
 
 
 def generate(spec, out_dir) -> list[str]:
+    if spec.model_for("langgraph").startswith("openai-codex"):
+        from ..errors import AdapterError
+
+        raise AdapterError(
+            "openai-codex is a pi CLI auth provider with no LangChain "
+            'integration; set model_overrides: {"langgraph": "openai/<model>"} '
+            "in the spec"
+        )
     e = Emitter(out_dir)
     e.write("my_agent/__init__.py", "")
     e.write("my_agent/agent.py", _agent_py(spec))
@@ -75,7 +83,7 @@ def _prompt_text(spec) -> str:
 
 
 def _agent_py(spec) -> str:
-    model_id = _langchain_model_id(spec.model)
+    model_id = _langchain_model_id(spec.model_for("langgraph"))
     prompt = _prompt_text(spec)
     mcp_block = ""
     tools_expr = "[]"
@@ -265,7 +273,8 @@ _PROVIDER_PACKAGES = {
 
 def _pyproject_toml(spec) -> str:
     deps = ['"langgraph>=0.2"', '"langchain>=0.3"', '"langchain-core>=0.3"']
-    provider = spec.model.partition("/")[0] if "/" in spec.model else ""
+    model = spec.model_for("langgraph")
+    provider = model.partition("/")[0] if "/" in model else ""
     pkg = _PROVIDER_PACKAGES.get(provider)
     if pkg:
         deps.append(f'"{pkg}>=0.3"')
@@ -363,7 +372,7 @@ def _config_json(spec) -> str:
             {
                 "name": spec.name,
                 "description": spec.description,
-                "model": spec.model,
+                "model": spec.model_for("langgraph"),
                 "trigger": spec.trigger,
                 "guardrails": spec.guardrails,
             },

@@ -3,7 +3,15 @@
   "args": [
     "--print",
     "--no-session",
+    "--no-extensions",
+    "--no-prompt-templates",
     "--no-themes",
+    "--no-context-files",
+    "--no-approve",
+    "--tools",
+    "read,bash,write",
+    "--thinking",
+    "off",
     "--model",
     "openai-codex/gpt-5.4-mini"
   ]

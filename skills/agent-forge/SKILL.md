@@ -36,6 +36,10 @@ Turn a conversation into a running agent bundle. The durable artifact is the
    - **side effects** — what may it *change* (write files where, send
      messages, post)? Each becomes an `allowed_side_effects` entry. Nothing
      means read-only — say so and confirm.
+   - **skip condition** — when must a run complete without the model
+     (empty inbox, no matching posts, all checks green)? That is
+     `llm_optional: true` plus the gatherer. If every tick needs the
+     model, set `llm_optional: false`.
    - **trigger** — manual or cron (5-field expression).
    - **system prompt** — draft it yourself from the answers; show it.
 

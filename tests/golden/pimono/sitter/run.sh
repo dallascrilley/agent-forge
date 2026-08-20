@@ -1,5 +1,5 @@
 #!/bin/bash
-# hn-ai-sitter — manual run entrypoint.
+# hn-ai-sitter — run entrypoint.
 # --dry-run prints the pi argv without executing.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -18,7 +18,7 @@ mapfile_args() {
 PI_ARGS=()
 while IFS= read -r line; do PI_ARGS+=("$line"); done < <(mapfile_args)
 
-CMD=(pi "${PI_ARGS[@]}" --append-system-prompt SYSTEM.md)
+CMD=(pi "${PI_ARGS[@]}" --system-prompt 'hn-ai-sitter. Follow the appended SYSTEM.md only.' --append-system-prompt SYSTEM.md @brief.md)
 
 if [ "${1:-}" = "--dry-run" ]; then
   printf '%q ' "${CMD[@]}" "${@:2}"
@@ -26,4 +26,22 @@ if [ "${1:-}" = "--dry-run" ]; then
   exit 0
 fi
 
-exec "${CMD[@]}" "$@"
+python3 guardrails.py lock-acquire && lock_rc=0 || lock_rc=$?
+if [ "$lock_rc" -eq 2 ]; then
+  exit 0
+fi
+if [ "$lock_rc" -ne 0 ]; then
+  exit "$lock_rc"
+fi
+trap 'python3 guardrails.py lock-drop' EXIT
+
+if ! python3 gatherer.py; then
+  python3 guardrails.py write-receipt blocked "gather failed"
+  exit 1
+fi
+if [ "$(tr -d '\n' < llm.txt)" = "skip" ]; then
+  python3 guardrails.py write-receipt quiet "nothing to do"
+  exit 0
+fi
+
+python3 guardrails.py run-pi sit.pi.log -- "${CMD[@]}" "$@"

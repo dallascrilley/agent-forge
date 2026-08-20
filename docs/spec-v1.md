@@ -31,7 +31,7 @@ validator in `forge/spec.py` is the authority;
 | `allowed_side_effects` | string[] | `[]` (read-only) | Side-effect action names the agent may perform, budgeted by `max_actions`. |
 | `stop_file` | path | `<name>.stop` | Present file ⇒ agent pauses: writes a `paused` receipt, exits. |
 | `receipt.path` | path | `receipts/last.json` | Where the run receipt is written. |
-| `llm_optional` | bool | `true` | A run with nothing to do must complete without invoking the model. |
+| `llm_optional` | bool | `true` | A run with nothing to do must complete without invoking the model. pi-mono cron sitters enforce this in `run.sh` (empty gather → quiet receipt, no `pi`). Sitters also take a 12-minute overlap lock and a 180s pi timeout (`SIT_LOCK_SEC` / `SIT_TIMEOUT_SEC`). |
 | `max_actions` | int ≥ 0 | `3` | Per-run cap on side-effecting actions. |
 
 ## Receipt schema

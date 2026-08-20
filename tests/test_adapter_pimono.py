@@ -54,6 +54,17 @@ def test_golden_tree(tmp_path, spec_name, golden_name):
     )
 
 
+def test_example_sitter_matches_golden():
+    """Checked-in examples/sitter-pimono is the generated sitter. Keep it in
+    lockstep with tests/golden/pimono/sitter (regenerate from sitter-spec.json)."""
+    problems = _diff_trees(EXAMPLES / "sitter-pimono", GOLDEN / "sitter")
+    assert not problems, (
+        "examples/sitter-pimono drifted. Regenerate:\n"
+        "  python3 forge/cli.py generate examples/sitter-spec.json "
+        "--runtime pimono --out examples/sitter-pimono\n" + "\n".join(problems)
+    )
+
+
 def test_cron_trigger_emits_plist(tmp_path):
     spec = load(EXAMPLES / "sitter-spec.json")
     written = generate(spec, tmp_path)

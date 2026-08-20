@@ -286,6 +286,7 @@ def _gatherer_py(spec) -> str:
 
 Replace load_items() with the real source. Default is empty (skip the model).
 If SITTER_ITEMS points at a JSON array, that array is the roster.
+classify() parks items (sendable=false) so a nonempty parked roster skips pi.
 """
 from __future__ import annotations
 
@@ -316,15 +317,25 @@ def _first_line(s: str) -> str:
     return ""
 
 
+def classify(item):
+    """Return {id, sendable} or None. Replace to park items before the model."""
+    if isinstance(item, str):
+        ident = _first_line(item)
+        return {"id": ident, "sendable": True} if ident else None
+    if isinstance(item, dict):
+        raw = item.get("id")
+        ident = _first_line(raw if isinstance(raw, str) else "")
+        if not ident:
+            return None
+        return {"id": ident, "sendable": bool(item.get("sendable", True))}
+    return None
+
+
 def main() -> int:
     try:
-        items = load_items()
-        allowed = []
-        for i in items:
-            if isinstance(i, str):
-                s = _first_line(i)
-                if s:
-                    allowed.append(s)
+        rows = [r for r in (classify(i) for i in load_items()) if r]
+        allowed = [r["id"] for r in rows if r["sendable"]]
+        parked = [r["id"] for r in rows if not r["sendable"]]
         llm = bool(allowed)
         lines = [
             "# " + NAME + " brief",
@@ -332,10 +343,15 @@ def main() -> int:
             "llm: " + ("run" if llm else "skip"),
             "items: " + str(len(allowed)),
             "",
-            "## Items",
+            "## Sendable",
         ]
         if allowed:
             lines.extend("- " + i for i in allowed)
+        else:
+            lines.append("(none)")
+        lines += ["", "## Parked"]
+        if parked:
+            lines.extend("- " + i for i in parked)
         else:
             lines.append("(none)")
         lines += ["", "## Allowlist", ", ".join(allowed) or "(none)", ""]
@@ -502,9 +518,9 @@ def _readme_md(spec) -> str:
     gather_docs = ""
     if _is_sit(spec):
         gather_docs = """
-`gatherer.py` runs before the model. An empty roster writes a quiet receipt
-and never starts pi. Point `SITTER_ITEMS` at a JSON array to inject a roster;
-replace `load_items()` with the real source.
+`gatherer.py` runs before the model. An empty or fully parked roster writes a
+quiet receipt and never starts pi. Point `SITTER_ITEMS` at a JSON array of
+strings or `{id, sendable}` objects; replace `load_items()` / `classify()`.
 
 A second sit while `{name}.lock` is younger than 12 minutes exits without
 starting pi. A sit that exceeds 180s writes a `blocked` receipt and logs

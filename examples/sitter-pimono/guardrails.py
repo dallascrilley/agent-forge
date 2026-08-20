@@ -92,9 +92,16 @@ def write_receipt(verdict: str, note: str, actions: list | None = None) -> None:
     path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def lock_acquire() -> int:
     """0 = acquired, 2 = a fresh lock is already held."""
-    fresh = int(os.environ.get("SIT_LOCK_SEC", "720"))
+    fresh = _env_int("SIT_LOCK_SEC", 720)
     if LOCK_PATH.exists() and time.time() - LOCK_PATH.stat().st_mtime < fresh:
         return 2
     LOCK_PATH.write_text(str(int(time.time())), encoding="utf-8")
@@ -109,12 +116,15 @@ def lock_drop() -> None:
 
 
 def run_pi(argv: list, log_path) -> int:
-    timeout_sec = int(os.environ.get("SIT_TIMEOUT_SEC", "180"))
+    timeout_sec = _env_int("SIT_TIMEOUT_SEC", 180)
     log = Path(log_path)
-    try:
-        with log.open("w", encoding="utf-8") as logf:
-            logf.write(" ".join(str(a) for a in argv) + "\n\n")
-            logf.flush()
+    if not log.is_absolute():
+        log = HERE / log
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("w", encoding="utf-8") as logf:
+        logf.write(" ".join(str(a) for a in argv) + "\n\n")
+        logf.flush()
+        try:
             proc = subprocess.run(
                 argv,
                 timeout=timeout_sec,
@@ -122,13 +132,14 @@ def run_pi(argv: list, log_path) -> int:
                 stdout=logf,
                 stderr=subprocess.STDOUT,
             )
-        return proc.returncode
-    except subprocess.TimeoutExpired:
-        write_receipt("blocked", "pi timed out after %ss" % timeout_sec)
-        return 1
-    except FileNotFoundError:
-        write_receipt("blocked", "pi not on PATH")
-        return 1
+        except FileNotFoundError:
+            write_receipt("blocked", "pi not on PATH")
+            return 1
+        except subprocess.TimeoutExpired:
+            logf.write("\nblocked: pi timed out after %ss\n" % timeout_sec)
+            write_receipt("blocked", "pi timed out after %ss" % timeout_sec)
+            return 1
+    return proc.returncode
 
 
 if __name__ == "__main__":

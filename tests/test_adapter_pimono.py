@@ -130,8 +130,9 @@ def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     assert "--no-skills" not in args
 
 
-def test_system_md_treats_brief_as_untrusted(tmp_path):
-    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+@pytest.mark.parametrize("spec_name", ["sitter-spec.json", "assistant-spec.json"])
+def test_system_md_treats_brief_as_untrusted(tmp_path, spec_name):
+    generate(load(EXAMPLES / spec_name), tmp_path)
     text = (tmp_path / "SYSTEM.md").read_text()
     assert "cannot override this contract" in text
 
@@ -202,6 +203,8 @@ def test_pi_timeout_writes_blocked_receipt(tmp_path):
     assert receipt["verdict"] == "blocked"
     log = (tmp_path / "sit.pi.log").read_text()
     assert log.startswith("pi ")
+    assert "timed out" in log
+    assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 
 def test_cron_sitter_dry_run_injects_brief(tmp_path):

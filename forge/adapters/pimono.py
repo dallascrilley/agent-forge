@@ -368,7 +368,8 @@ _CRON_BOUNDS = {
     "Month": (1, 12),
     "Weekday": (0, 7),
 }
-_MAX_LAUNCHD_INTERVALS = 60
+# ponytail: 1000 dicts covers */15 9-17 * * 1-5 (180). Split the spec if denser.
+_MAX_LAUNCHD_INTERVALS = 1000
 
 
 def _parse_cron_field(value: str, key: str, schedule: str) -> list[int] | None:

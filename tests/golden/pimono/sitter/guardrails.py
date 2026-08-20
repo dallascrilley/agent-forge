@@ -176,7 +176,9 @@ def run_pi(argv: list, log_path) -> int:
             logf.write("\nblocked: pi timed out after %ss\n" % timeout_sec)
             write_receipt("blocked", "pi timed out after %ss" % timeout_sec)
             return 1
-    return proc.returncode
+        if proc.returncode != 0:
+            write_receipt("blocked", "pi exited %s" % proc.returncode)
+        return proc.returncode
 
 
 if __name__ == "__main__":

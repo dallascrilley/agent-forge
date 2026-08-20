@@ -285,9 +285,12 @@ def load_items() -> list:
 
 
 def _first_line(s: str) -> str:
-    return (
-        s.replace("\\r\\n", "\\n").replace("\\r", "\\n").split("\\n", 1)[0].strip()
-    )
+    text = s.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    for line in text.split("\\n"):
+        t = line.strip()
+        if t:
+            return t
+    return ""
 
 
 def main() -> int:

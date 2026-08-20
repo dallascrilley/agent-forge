@@ -219,10 +219,20 @@ def _mcp_json(spec) -> str:
 _MCP_TS = r'''/**
  * Register MCP tools from mcp.json. Do not copy mcp.json into ~/.pi.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+function requireTool(name: string) {
+  const r = spawnSync("python3", ["guardrails.py", "check-tool", name], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    throw new Error((r.stderr || r.stdout || "tool refused").trim());
+  }
+}
 
 type ServerCfg = {
   command?: string;
@@ -413,6 +423,7 @@ export default async function (pi: ExtensionAPI) {
             description: tool.description || name + " MCP tool",
             parameters: schema as never,
             async execute(_id, params) {
+              requireTool(tool.name);
               const result = (await client.call("tools/call", {
                 name: tool.name,
                 arguments: params,
@@ -821,7 +832,7 @@ Every run writes `{g['receipt']['path']}`: verdict, actions, note, ts.
 
 ## MCP servers
 
-{"`run.sh` loads `mcp.json` via `pi --no-extensions --extension mcp.ts` (explicit `-e` still works under `--no-extensions`; there is no `--mcp-config`). Do not copy `mcp.json` into `~/.pi`. `guardrails.allowed_tools` names are also passed to `pi --tools` so those MCP tools pass pi's allowlist." if spec.mcp_servers else "This agent declares no MCP servers."}
+{"`run.sh` loads `mcp.json` via `pi --no-extensions --extension mcp.ts` (explicit `-e` still works under `--no-extensions`; there is no `--mcp-config`). Do not copy `mcp.json` into `~/.pi`. `guardrails.allowed_tools` names are also passed to `pi --tools` so those MCP tools pass pi's allowlist. Each MCP tool call runs `python3 guardrails.py check-tool NAME` first." if spec.mcp_servers else "This agent declares no MCP servers. `python3 guardrails.py check-tool NAME` still gates `allowed_tools` (omitted list = all tools)."}
 {sched}"""
 
 
@@ -834,6 +845,7 @@ Reads config.json (guardrails section) from the bundle directory:
 - stopped()          stop-file check; a present stop file pauses the agent
 - allow(action)      allowlist + per-run budget check
 - require(action)    allow() or exit 1
+- check-tool NAME    allowed_tools gate (omitted list = all tools)
 - put RELPATH        require write-file:RELPATH, then stdin → file
 - write_receipt()    append the run receipt JSON
 - lock-acquire/drop  overlap lock for cron sitters
@@ -867,6 +879,22 @@ def _matches(pattern: str, action: str) -> bool:
     if pattern.endswith("/"):
         return action.startswith(pattern)
     return action == pattern
+
+
+def check_tool(name: str) -> str | None:
+    """None if allowed. Omitted allowed_tools means all tools."""
+    allowed = GUARDRAILS.get("allowed_tools")
+    if allowed is None:
+        return None
+    if any(_matches(p, name) for p in allowed):
+        return None
+    return "guardrails: tool %r is not in allowed_tools" % name
+
+
+def require_tool(name: str) -> None:
+    msg = check_tool(name)
+    if msg:
+        raise SystemExit(msg)
 
 
 def _this_run_allows(action: str) -> bool:
@@ -1033,12 +1061,15 @@ def run_pi(argv: list, log_path) -> int:
 if __name__ == "__main__":
     # CLI:
     #   guardrails.py require <action>
+    #   guardrails.py check-tool <name>
     #   guardrails.py put <relpath>   (stdin → file)
     #   guardrails.py write-receipt <verdict> <note> [action ...]
     #   guardrails.py lock-acquire | lock-drop
     #   guardrails.py run-pi <log> -- <argv...>
     if len(sys.argv) >= 3 and sys.argv[1] == "require":
         Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "check-tool":
+        require_tool(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == "put":
         put(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":

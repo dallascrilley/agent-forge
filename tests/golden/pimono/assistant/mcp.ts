@@ -1,10 +1,20 @@
 /**
  * Register MCP tools from mcp.json. Do not copy mcp.json into ~/.pi.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+function requireTool(name: string) {
+  const r = spawnSync("python3", ["guardrails.py", "check-tool", name], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    throw new Error((r.stderr || r.stdout || "tool refused").trim());
+  }
+}
 
 type ServerCfg = {
   command?: string;
@@ -195,6 +205,7 @@ export default async function (pi: ExtensionAPI) {
             description: tool.description || name + " MCP tool",
             parameters: schema as never,
             async execute(_id, params) {
+              requireTool(tool.name);
               const result = (await client.call("tools/call", {
                 name: tool.name,
                 arguments: params,

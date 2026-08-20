@@ -39,7 +39,7 @@ Every run writes `receipts/last.json`: verdict, actions, note, ts.
 
 ## MCP servers
 
-This agent declares no MCP servers.
+This agent declares no MCP servers. `python3 guardrails.py check-tool NAME` still gates `allowed_tools` (omitted list = all tools).
 
 ## Schedule (cron: `17 8 * * *`)
 

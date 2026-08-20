@@ -90,6 +90,39 @@ def test_mcp_json_only_when_servers(tmp_path):
     assert mcp["mcpServers"]["filesystem"]["command"] == "npx"
 
 
+def test_check_tool_allows_listed_and_refuses_others(tmp_path):
+    generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
+    allowed = subprocess.run(
+        ["python3", "guardrails.py", "check-tool", "read_file"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert allowed.returncode == 0, allowed.stderr
+    refused = subprocess.run(
+        ["python3", "guardrails.py", "check-tool", "write_file"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert refused.returncode == 1
+    assert "not in allowed_tools" in (refused.stderr + refused.stdout)
+
+
+def test_omitted_allowed_tools_allows_all(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    proc = subprocess.run(
+        ["python3", "guardrails.py", "check-tool", "write_file"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
 def test_mcp_extension_wiring_only_when_servers(tmp_path):
     sitter = tmp_path / "a"
     assistant = tmp_path / "b"

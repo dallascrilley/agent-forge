@@ -5,6 +5,7 @@ Reads config.json (guardrails section) from the bundle directory:
 - stopped()          stop-file check; a present stop file pauses the agent
 - allow(action)      allowlist + per-run budget check
 - require(action)    allow() or exit 1
+- check-tool NAME    allowed_tools gate (omitted list = all tools)
 - put RELPATH        require write-file:RELPATH, then stdin → file
 - write_receipt()    append the run receipt JSON
 - lock-acquire/drop  overlap lock for cron sitters
@@ -38,6 +39,22 @@ def _matches(pattern: str, action: str) -> bool:
     if pattern.endswith("/"):
         return action.startswith(pattern)
     return action == pattern
+
+
+def check_tool(name: str) -> str | None:
+    """None if allowed. Omitted allowed_tools means all tools."""
+    allowed = GUARDRAILS.get("allowed_tools")
+    if allowed is None:
+        return None
+    if any(_matches(p, name) for p in allowed):
+        return None
+    return "guardrails: tool %r is not in allowed_tools" % name
+
+
+def require_tool(name: str) -> None:
+    msg = check_tool(name)
+    if msg:
+        raise SystemExit(msg)
 
 
 def _this_run_allows(action: str) -> bool:
@@ -204,12 +221,15 @@ def run_pi(argv: list, log_path) -> int:
 if __name__ == "__main__":
     # CLI:
     #   guardrails.py require <action>
+    #   guardrails.py check-tool <name>
     #   guardrails.py put <relpath>   (stdin → file)
     #   guardrails.py write-receipt <verdict> <note> [action ...]
     #   guardrails.py lock-acquire | lock-drop
     #   guardrails.py run-pi <log> -- <argv...>
     if len(sys.argv) >= 3 and sys.argv[1] == "require":
         Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "check-tool":
+        require_tool(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == "put":
         put(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":

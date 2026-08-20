@@ -52,8 +52,11 @@ Every run of a generated agent ends with one JSON receipt:
 - `actions` — side-effecting actions taken (allowlisted, budgeted).
 - `tool_calls` / `refused` — every tool invocation and every guardrails
   refusal. Recorded **mechanically** by runtimes that wrap tools (LangGraph).
-  pi-mono receipts are model-reported via `guardrails.py write-receipt` and
-  carry `verdict`/`actions`/`note`/`ts`.
+  pi-mono MCP calls run `python3 guardrails.py check-tool NAME` first
+  (prefix match when a pattern ends in `/`; omitted `allowed_tools` allows
+  all). pi-mono receipts stay model-reported via
+  `guardrails.py write-receipt` and carry `verdict`/`actions`/`note`/`ts`
+  only — they do not record `tool_calls` / `refused`.
 
 ## Validation rules that bite
 

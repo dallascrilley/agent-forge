@@ -4,17 +4,25 @@
 """
 
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+from forge.adapters import eve, langgraph, pimono  # noqa: E402
+from forge.spec import load  # noqa: E402
+
+ADAPTERS = {"pimono": pimono, "langgraph": langgraph, "eve": eve}
+
 EXAMPLES = REPO / "examples"
 GOLDEN = REPO / "tests" / "golden"
+
 
 TARGETS = {
     "pimono": [("sitter-spec.json", "sitter"), ("assistant-spec.json", "assistant")],
     "langgraph": [("assistant-spec.json", "assistant")],
+    "eve": [("sitter-spec.json", "sitter"), ("assistant-spec.json", "assistant")],
 }
 
 
@@ -25,20 +33,10 @@ def main() -> int:
             if dest.exists():
                 shutil.rmtree(dest)
             dest.mkdir(parents=True)
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(REPO / "forge" / "cli.py"),
-                    "generate",
-                    str(EXAMPLES / spec_name),
-                    "--runtime",
-                    runtime,
-                    "--out",
-                    str(dest),
-                ],
-                check=True,
-                capture_output=True,
-            )
+            spec = load(EXAMPLES / spec_name)
+            if runtime not in spec.runtimes:
+                spec.runtimes.append(runtime)
+            ADAPTERS[runtime].generate(spec, dest)
             print(f"blessed {dest.relative_to(REPO)}")
     return 0
 

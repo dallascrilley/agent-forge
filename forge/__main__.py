@@ -1,0 +1,7 @@
+"""Run agent-forge as ``python3 -m forge``."""
+
+from .cli import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

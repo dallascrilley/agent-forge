@@ -2,4 +2,4 @@
 
 __version__ = "0.1.0"
 SPEC_VERSION = 1
-KNOWN_RUNTIMES = ("pimono", "langgraph")
+KNOWN_RUNTIMES = ("pimono", "langgraph", "eve")

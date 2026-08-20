@@ -46,15 +46,25 @@ git clone https://github.com/dallascrilley/agent-forge.git
 cd agent-forge
 ```
 
-There is nothing to install. `forge/cli.py` runs on any python3.
+There is nothing to install for the generator itself; it uses stdlib-only
+Python 3.10+.
+
+When working from the repository root, prefer `python3 -m forge`; it also
+supports direct execution as `python3 forge/cli.py` from a cloned checkout.
 
 ## Quickstart
 
 ### The 60-second version
 
 ```bash
-python3 forge/cli.py validate examples/sitter-spec.json
-python3 forge/cli.py generate examples/sitter-spec.json --runtime pimono --out /tmp/hn-sitter
+python3 -m forge validate examples/sitter-spec.json
+python3 -m forge generate examples/sitter-spec.json --runtime pimono --out /tmp/hn-sitter
+python3 -m forge new \
+  --name daily-summarizer \
+  --purpose "Summarize the daily inbox." \
+  --model openai/gpt-5-mini \
+  --runtime pimono \
+  --out /tmp/daily-summarizer-spec.json
 bash /tmp/hn-sitter/run.sh --dry-run   # prints the pi argv
 ```
 
@@ -102,7 +112,9 @@ omission.
 v1 reference: [`docs/spec-v1.md`](docs/spec-v1.md). Machine-readable schema:
 [`schema/agent-spec.schema.json`](schema/agent-spec.schema.json). Examples:
 [`examples/`](examples/). `examples/sitter-pimono/` is generated from
-`examples/sitter-spec.json`; after adapter changes, regenerate it.
+`examples/sitter-spec.json`; `examples/assistant-langgraph/` is generated from
+`examples/assistant-spec.json`. After adapter changes, regenerate the matching
+example tree.
 
 ## Runtimes
 
@@ -110,7 +122,7 @@ v1 reference: [`docs/spec-v1.md`](docs/spec-v1.md). Machine-readable schema:
 |---|---|---|
 | pi-mono | ✅ | harness folder (`harness.json`, `SYSTEM.md`, `run.sh`, …) |
 | LangGraph | ✅ | runnable Python project (`langgraph.json`, `create_agent` graph) |
-| eve (Vercel) | planned | directory agent (`agent.ts`, `instructions.md`, `skills/`) |
+| eve (Vercel) | ✅ | filesystem agent (`agent/agent.ts`, `agent/instructions.md`, `agent/skills/`, `agent/schedules/`) |
 | hermes (Nous) | planned | SOUL.md + SKILL.md skills + cron |
 
 Writing an adapter is a single Python module — see

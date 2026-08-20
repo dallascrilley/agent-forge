@@ -39,6 +39,30 @@ def test_golden_tree(tmp_path):
     )
 
 
+def test_example_assistant_matches_golden():
+    """Checked-in LangGraph example stays generated from the assistant spec."""
+    example = EXAMPLES / "assistant-langgraph"
+    golden = GOLDEN / "assistant"
+    example_files, golden_files = _tree_files(example), _tree_files(golden)
+    command = (
+        "python3 -m forge generate examples/assistant-spec.json "
+        "--runtime langgraph --out examples/assistant-langgraph"
+    )
+    assert example_files == golden_files, (
+        f"file sets differ: {example_files} vs {golden_files}. Regenerate with:\n"
+        f"  {command}"
+    )
+    diffs = [
+        rel
+        for rel in example_files
+        if not filecmp.cmp(example / rel, golden / rel, shallow=False)
+    ]
+    assert not diffs, (
+        "examples/assistant-langgraph drifted: " + ", ".join(diffs) +
+        f". Regenerate with:\n  {command}"
+    )
+
+
 def test_skills_emitted_from_assistant_spec(tmp_path):
     spec = load(EXAMPLES / "assistant-spec.json")
     generate(spec, tmp_path)

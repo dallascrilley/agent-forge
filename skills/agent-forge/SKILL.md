@@ -1,6 +1,6 @@
 ---
 name: agent-forge
-description: Scaffold a self-contained agent (harness config, system prompt, skills, MCP servers, plugins, trigger, guardrails) from a short interview or a partial JSON spec. Emits idiomatic bundles for pi-mono and LangGraph runtimes. Use when the user wants to create, generate, or scaffold a new agent.
+description: Scaffold a self-contained agent (harness config, system prompt, skills, MCP servers, plugins, trigger, guardrails) from a short interview or a partial JSON spec. Emits idiomatic bundles for pi-mono, LangGraph, and Eve runtimes. Use when the user wants to create, generate, or scaffold a new agent.
 ---
 
 # agent-forge
@@ -15,6 +15,8 @@ Turn a conversation into a running agent bundle. The durable artifact is the
   location of their choosing; remember the path for this session.
 - `python3` (3.10+). The generator is stdlib-only — never pip-install
   anything for generation itself.
+- When `forge` is importable (for example, from the repository root), prefer
+  `python3 -m forge`; otherwise use `python3 <repo>/forge/cli.py`.
 
 ## Procedure
 
@@ -27,7 +29,8 @@ Turn a conversation into a running agent bundle. The durable artifact is the
    Collect, in this order:
    - **name + purpose** — what should this agent do, in one or two
      sentences? (Derive a kebab-case name; confirm it.)
-   - **runtime** — `pimono`, `langgraph`, or both. Ask what they run today.
+   - **runtime** — `pimono`, `langgraph`, `eve`, or a combination. Ask what they
+     run today.
    - **model** — the runtime-native model id (e.g. `anthropic/claude-sonnet-4-5`,
      `openai/gpt-5-mini`). Offer 2-3 sensible defaults.
    - **tools & MCP servers** — does it need MCP? If yes, which servers
@@ -55,8 +58,17 @@ Turn a conversation into a running agent bundle. The durable artifact is the
 5. **Validate, then generate:**
 
    ```bash
-   python3 <repo>/forge/cli.py validate <spec>
-   python3 <repo>/forge/cli.py generate <spec> --runtime <rt> --out <dir>
+   python3 -m forge validate <spec>
+   python3 -m forge generate <spec> --runtime <rt> --out <dir>
+   ```
+
+   If `forge` is not importable, replace `python3 -m forge` with
+   `python3 <repo>/forge/cli.py`. For a non-interactive producer path, write
+   the spec first with `forge new`:
+
+   ```bash
+   python3 -m forge new --name <slug> --purpose "<purpose>" \
+     --model <model> --runtime <rt> --out <spec>
    ```
 
    Validation errors: fix the spec, re-validate. Do not hand-edit generated
@@ -72,12 +84,12 @@ Turn a conversation into a running agent bundle. The durable artifact is the
 
 ## Rules
 
-- Guardrails are not optional decoration. Never suggest removing
-  `guardrails.py`, the stop file, or the receipt contract to make something
+- Guardrails are not optional decoration. Never suggest removing the generated
+  guardrails module, the stop file, or the receipt contract to make something
   work — change the spec and regenerate.
-- If the user asks for a runtime with no adapter (eve, hermes): say it is
-  not supported yet, point at `docs/adapters.md`, and still write the spec
-  with that runtime omitted from `runtimes` (spec is future-proof; the
-  `runtimes` list only names what to emit now).
+- If the user asks for a runtime with no adapter (hermes): say it is not
+  supported yet, point at `docs/adapters.md`, and still write the spec with
+  that runtime omitted from `runtimes` (spec is future-proof; the `runtimes`
+  list only names what to emit now).
 - Keep the spec free of machine-specific absolute paths unless the user
   explicitly wants them.

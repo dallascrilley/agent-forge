@@ -1,0 +1,11 @@
+{
+  "name": "hn-ai-sitter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "eve dev"
+  },
+  "dependencies": {
+    "eve": "latest"
+  }
+}

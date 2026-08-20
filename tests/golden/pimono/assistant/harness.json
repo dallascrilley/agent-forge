@@ -9,7 +9,7 @@
     "--no-context-files",
     "--no-approve",
     "--tools",
-    "read,bash,write",
+    "read",
     "--thinking",
     "off",
     "--model",

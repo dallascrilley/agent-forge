@@ -5,6 +5,7 @@ Reads config.json (guardrails section) from the bundle directory:
 - stopped()          stop-file check; a present stop file pauses the agent
 - allow(action)      allowlist + per-run budget check
 - require(action)    allow() or exit 1
+- put RELPATH        require write-file:RELPATH, then stdin → file
 - write_receipt()    append the run receipt JSON
 - lock-acquire/drop  overlap lock for cron sitters
 - run-pi             argv-logged pi launch with timeout
@@ -86,6 +87,24 @@ class Budget:
             raise SystemExit(f"guardrails: refused action {action!r}")
 
 
+def put(relpath: str) -> None:
+    """Write stdin to a bundle-relative path after require('write-file:…')."""
+    if (
+        not relpath
+        or relpath.startswith("/")
+        or ".." in Path(relpath).parts
+    ):
+        raise SystemExit(f"guardrails: refused path {relpath!r}")
+    dest = (HERE / relpath).resolve()
+    try:
+        dest.relative_to(HERE.resolve())
+    except ValueError:
+        raise SystemExit(f"guardrails: refused path {relpath!r}")
+    Budget().require("write-file:" + relpath)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(sys.stdin.buffer.read())
+
+
 def allow(action: str) -> bool:
     """Budgetless allowlist check (for pre-flight questions)."""
     return any(
@@ -163,11 +182,14 @@ def run_pi(argv: list, log_path) -> int:
 if __name__ == "__main__":
     # CLI:
     #   guardrails.py require <action>
+    #   guardrails.py put <relpath>   (stdin → file)
     #   guardrails.py write-receipt <verdict> <note> [action ...]
     #   guardrails.py lock-acquire | lock-drop
     #   guardrails.py run-pi <log> -- <argv...>
     if len(sys.argv) >= 3 and sys.argv[1] == "require":
         Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "put":
+        put(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":
         write_receipt(sys.argv[2], sys.argv[3], sys.argv[4:])
     elif len(sys.argv) >= 2 and sys.argv[1] == "lock-acquire":

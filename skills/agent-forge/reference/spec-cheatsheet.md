@@ -42,7 +42,9 @@ Rules that bite:
 Runtime notes:
 
 - **pimono**: emits `harness.json` (isolated `pi` flags), `SYSTEM.md`,
-  `skills/`, `mcp.json`, `config.json`, `guardrails.py` (`require` CLI),
+  `skills/`, `mcp.json` + `mcp.ts` when servers are declared (loaded with
+  `--extension mcp.ts` under `--no-extensions`; `allowed_tools` names are
+  appended to `--tools`), `config.json`, `guardrails.py` (`require` CLI),
   `run.sh` (`--dry-run` prints argv), `gatherer.py` + launchd plist when
   cron. Cron sitters skip `pi` on an empty gather, take a 12-minute overlap
   lock, and cap pi at 180s. Model id is passed to `pi --model` verbatim;

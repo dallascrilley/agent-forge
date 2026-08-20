@@ -19,6 +19,8 @@ tracks paths, sets the executable bit).
    `agent.ts`/`instructions.md`/`skills/`/`schedules/`; hermes: `SOUL.md` +
    SKILL.md dirs + cron) get config trees. Code-native runtimes (LangGraph)
    get minimal runnable code. Do not force one runtime's shape onto another.
+   pi-mono MCP: `mcp.json` plus a generated `mcp.ts` loaded with
+   `--extension mcp.ts` under `--no-extensions` (no `--mcp-config` on pi).
 3. **Enforce the guardrails section mechanically.** Every adapter must emit:
    stop-file handling, the `allowed_tools`/`allowed_side_effects` gates, a
    per-run action budget, and the receipt write. Enforcement must be a call

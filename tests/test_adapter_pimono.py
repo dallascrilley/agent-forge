@@ -90,6 +90,40 @@ def test_mcp_json_only_when_servers(tmp_path):
     assert mcp["mcpServers"]["filesystem"]["command"] == "npx"
 
 
+def test_mcp_extension_wiring_only_when_servers(tmp_path):
+    sitter = tmp_path / "a"
+    assistant = tmp_path / "b"
+    generate(load(EXAMPLES / "sitter-spec.json"), sitter)
+    generate(load(EXAMPLES / "assistant-spec.json"), assistant)
+    a_args = json.loads((sitter / "harness.json").read_text())["args"]
+    b_args = json.loads((assistant / "harness.json").read_text())["args"]
+    assert "--extension" not in a_args
+    assert "mcp.ts" not in a_args
+    assert not (sitter / "mcp.ts").exists()
+    assert a_args[a_args.index("--tools") + 1] == "read,bash"
+    assert "--no-extensions" in a_args
+    assert "--extension" in b_args
+    assert b_args[b_args.index("--extension") + 1] == "mcp.ts"
+    assert "--no-extensions" in b_args
+    assert (assistant / "mcp.ts").is_file()
+    assert "registerTool" in (assistant / "mcp.ts").read_text()
+    tools = b_args[b_args.index("--tools") + 1].split(",")
+    assert tools[0] == "read"
+    for name in ("read_file", "read_text_file", "list_directory", "search_files"):
+        assert name in tools
+    dry = subprocess.run(
+        ["bash", str(assistant / "run.sh"), "--dry-run"],
+        cwd=assistant,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert dry.returncode == 0, dry.stderr
+    assert "--extension" in dry.stdout
+    assert "mcp.ts" in dry.stdout
+    assert "--no-extensions" in dry.stdout
+
+
 def test_guardrails_call_sites_present(tmp_path):
     spec = load(EXAMPLES / "sitter-spec.json")
     generate(spec, tmp_path)
@@ -152,9 +186,12 @@ def test_harness_uses_pimono_model_override(tmp_path):
 def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     generate(load(EXAMPLES / "assistant-spec.json"), tmp_path)
     args = json.loads((tmp_path / "harness.json").read_text())["args"]
-    _assert_isolation(args, "read")
+    _assert_isolation(
+        args,
+        "read,read_file,read_text_file,list_directory,search_files",
+    )
     assert "--no-skills" not in args
-    assert args[args.index("--tools") + 1] == "read"
+    assert args[args.index("--extension") + 1] == "mcp.ts"
 
 
 def test_assistant_run_sh_uses_run_pi_without_timeout(tmp_path):

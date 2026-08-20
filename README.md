@@ -8,7 +8,7 @@ a versioned spec; agent-forge emits whatever each runtime considers native.
 
 ```
 spec.json ──┬── --runtime pimono    → harness.json, SYSTEM.md, skills/, mcp.json,
-            │                         guardrails.py, run.sh, launchd plist
+            │                         mcp.ts, guardrails.py, run.sh, launchd plist
             └── --runtime langgraph → my_agent/agent.py, langgraph.json,
                                       pyproject.toml, run.py, SCHEDULING.md
 ```

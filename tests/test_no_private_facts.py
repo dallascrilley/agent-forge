@@ -22,7 +22,7 @@ FORBIDDEN = [
 
 TEXT_SUFFIXES = {
     ".py", ".json", ".md", ".txt", ".sh", ".plist", ".toml", ".yaml",
-    ".yml", ".cfg", ".example",
+    ".yml", ".cfg", ".example", ".ts",
 }
 TEXT_NAMES = {"LICENSE", ".gitignore"}
 

@@ -266,6 +266,27 @@ def test_missing_pi_writes_blocked_receipt(tmp_path):
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 
+def test_pi_nonzero_exit_writes_blocked_receipt(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps(["write-file:inbox/today.md"]))
+    env = _fake_pi(tmp_path, "exit 7\n")
+    env["SITTER_ITEMS"] = str(items)
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 7
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "blocked"
+    assert "7" in receipt["note"]
+    assert not (tmp_path / "hn-ai-sitter.lock").exists()
+
+
 def test_require_budget_persists_across_processes(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
     first = subprocess.run(

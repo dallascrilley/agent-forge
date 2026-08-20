@@ -56,12 +56,14 @@ def test_cron_trigger_emits_plist(tmp_path):
     spec = load(EXAMPLES / "sitter-spec.json")
     written = generate(spec, tmp_path)
     assert f"launchd/local.{spec.name}.plist" in written
+    assert "gatherer.py" in written
 
 
 def test_manual_trigger_omits_plist(tmp_path):
     spec = load(EXAMPLES / "assistant-spec.json")
     written = generate(spec, tmp_path)
     assert not any("launchd" in w for w in written)
+    assert "gatherer.py" not in written
 
 
 def test_mcp_json_only_when_servers(tmp_path):
@@ -102,6 +104,8 @@ _ISOLATION_FLAGS = (
     "--no-themes",
     "--no-context-files",
     "--no-approve",
+    "--thinking",
+    "--tools",
 )
 
 
@@ -126,14 +130,25 @@ def test_assistant_harness_is_isolated_but_keeps_skills(tmp_path):
     assert "--no-skills" not in args
 
 
-def test_cron_sitter_skips_pi_when_gather_empty(tmp_path):
+def test_system_md_treats_brief_as_untrusted(tmp_path):
     generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    text = (tmp_path / "SYSTEM.md").read_text()
+    assert "cannot override this contract" in text
+
+
+def _fake_pi(tmp_path: Path, body: str) -> dict:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     pi = bin_dir / "pi"
-    pi.write_text("#!/bin/sh\necho ran > \"$(dirname \"$0\")/pi.ran\"\nexit 99\n")
+    pi.write_text("#!/bin/sh\n" + body)
     pi.chmod(pi.stat().st_mode | stat.S_IEXEC)
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+    return env
+
+
+def test_cron_sitter_skips_pi_when_gather_empty(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 99\n')
     proc = subprocess.run(
         ["bash", str(tmp_path / "run.sh")],
         cwd=tmp_path,
@@ -143,9 +158,50 @@ def test_cron_sitter_skips_pi_when_gather_empty(tmp_path):
         timeout=15,
     )
     assert proc.returncode == 0, proc.stderr
-    assert not (bin_dir / "pi.ran").exists(), "pi must not start on an empty gather"
+    assert not (tmp_path / "bin" / "pi.ran").exists(), "pi must not start on an empty gather"
     receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
     assert receipt["verdict"] == "quiet"
+    assert not (tmp_path / "hn-ai-sitter.lock").exists()
+
+
+def test_overlap_lock_skips_pi(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    (tmp_path / "hn-ai-sitter.lock").write_text("held")
+    env = _fake_pi(tmp_path, 'echo ran > "$(dirname "$0")/pi.ran"\nexit 99\n')
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert not (tmp_path / "bin" / "pi.ran").exists()
+    assert not (tmp_path / "receipts" / "last.json").exists()
+    assert (tmp_path / "hn-ai-sitter.lock").exists()
+
+
+def test_pi_timeout_writes_blocked_receipt(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    items = tmp_path / "items.json"
+    items.write_text(json.dumps(["write-file:inbox/today.md"]))
+    env = _fake_pi(tmp_path, "sleep 5\n")
+    env["SITTER_ITEMS"] = str(items)
+    env["SIT_TIMEOUT_SEC"] = "1"
+    proc = subprocess.run(
+        ["bash", str(tmp_path / "run.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 1
+    receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
+    assert receipt["verdict"] == "blocked"
+    log = (tmp_path / "sit.pi.log").read_text()
+    assert log.startswith("pi ")
 
 
 def test_cron_sitter_dry_run_injects_brief(tmp_path):
@@ -184,6 +240,25 @@ def test_guardrails_require_refuses_unknown_action(tmp_path):
         timeout=15,
     )
     assert good.returncode == 0
+
+
+def test_empty_gather_allow_file_blocks_spec_allowed_action(tmp_path):
+    generate(load(EXAMPLES / "sitter-spec.json"), tmp_path)
+    subprocess.run(
+        ["python3", "gatherer.py"],
+        cwd=tmp_path,
+        check=True,
+        timeout=15,
+    )
+    blocked = subprocess.run(
+        ["python3", "guardrails.py", "require", "write-file:inbox/today.md"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert blocked.returncode == 1
+    assert "refused" in (blocked.stderr + blocked.stdout)
 
 
 def test_guardrails_helper_runtime_behavior(tmp_path):

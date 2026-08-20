@@ -26,10 +26,19 @@ if [ "${1:-}" = "--dry-run" ]; then
   exit 0
 fi
 
+python3 guardrails.py lock-acquire && lock_rc=0 || lock_rc=$?
+if [ "$lock_rc" -eq 2 ]; then
+  exit 0
+fi
+if [ "$lock_rc" -ne 0 ]; then
+  exit "$lock_rc"
+fi
+trap 'python3 guardrails.py lock-drop' EXIT
+
 python3 gatherer.py
 if grep -q '^llm: skip' brief.md; then
   python3 guardrails.py write-receipt quiet "nothing to do"
   exit 0
 fi
 
-exec "${CMD[@]}" "$@"
+python3 guardrails.py run-pi sit.pi.log -- "${CMD[@]}" "$@"

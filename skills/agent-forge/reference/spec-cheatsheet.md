@@ -43,8 +43,8 @@ Runtime notes:
 - **pimono**: emits `harness.json` (isolated `pi` flags), `SYSTEM.md`,
   `skills/`, `mcp.json`, `config.json`, `guardrails.py` (`require` CLI),
   `run.sh` (`--dry-run` prints argv), `gatherer.py` + launchd plist when
-  cron. Cron sitters skip `pi` on an empty gather. Model id is passed to
-  `pi --model` verbatim.
+  cron. Cron sitters skip `pi` on an empty gather, take a 12-minute overlap
+  lock, and cap pi at 180s. Model id is passed to `pi --model` verbatim.
 - **langgraph**: emits a minimal project (`my_agent/agent.py`,
   `langgraph.json`, `pyproject.toml`, `.env.example`, `run.py`,
   `SCHEDULING.md`). Model id `provider/model` becomes `provider:model` for

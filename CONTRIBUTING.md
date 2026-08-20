@@ -15,6 +15,11 @@ runtime dependencies. Dev dependencies (pytest, jsonschema) are fine.
 - Keep generated output free of machine-specific paths and personal facts;
   `tests/test_no_private_facts.py` enforces this.
 
+## Issue tracking
+
+Agent execution uses Beads (`bd`) in this repo. Public bugs belong on GitHub
+Issues. Do not file Linear tickets for implementation micro-tasks.
+
 ## Run the tests
 
 ```bash

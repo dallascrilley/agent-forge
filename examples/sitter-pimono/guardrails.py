@@ -152,6 +152,17 @@ def lock_drop() -> None:
         pass
 
 
+def _pi_env() -> dict:
+    """Parent keeps gather credentials; the pi child does not."""
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    gh_dir = HERE / ".sit-gh"
+    gh_dir.mkdir(exist_ok=True)
+    env["GH_CONFIG_DIR"] = str(gh_dir)
+    return env
+
+
 def run_pi(argv: list, log_path) -> int:
     timeout_sec = _env_int("SIT_TIMEOUT_SEC", 180)
     log = Path(log_path)
@@ -160,6 +171,7 @@ def run_pi(argv: list, log_path) -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
     header = " ".join(str(a) for a in argv) + "\n\n"
     capture = timeout_sec > 0
+    child_env = _pi_env()
     try:
         if capture:
             with log.open("w", encoding="utf-8") as logf:
@@ -169,12 +181,13 @@ def run_pi(argv: list, log_path) -> int:
                     argv,
                     timeout=timeout_sec,
                     cwd=str(HERE),
+                    env=child_env,
                     stdout=logf,
                     stderr=subprocess.STDOUT,
                 )
         else:
             log.write_text(header, encoding="utf-8")
-            proc = subprocess.run(argv, cwd=str(HERE))
+            proc = subprocess.run(argv, cwd=str(HERE), env=child_env)
     except FileNotFoundError:
         write_receipt("blocked", "pi not on PATH")
         return 1

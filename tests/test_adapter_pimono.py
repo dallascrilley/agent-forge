@@ -537,6 +537,18 @@ def test_cron_day_of_month():
     ]
 
 
+def test_cron_business_hours_quarters():
+    got = _cron_to_calendar_interval("*/15 9-17 * * 1-5")
+    assert len(got) == 180
+    assert got[0] == {"Minute": 0, "Hour": 9, "Weekday": 1}
+    assert got[-1] == {"Minute": 45, "Hour": 17, "Weekday": 5}
+
+
+def test_cron_explosion_rejected():
+    with pytest.raises(ValueError, match="1000"):
+        _cron_to_calendar_interval("*/1 0-23 * * 1-5")
+
+
 def test_cron_step_rejected_for_day():
     with pytest.raises(ValueError):
         _cron_to_calendar_interval("0 0 */2 * *")

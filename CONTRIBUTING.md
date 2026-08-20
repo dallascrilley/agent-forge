@@ -25,6 +25,7 @@ Issues. Do not file Linear tickets for implementation micro-tasks.
 ```bash
 pip install -r requirements-dev.txt
 python3 -m pytest -q
+ruff check forge tests
 ```
 
 ## Adding a runtime

@@ -6,6 +6,7 @@ Output vocabulary (generalized from a proven sitting-agent pattern):
   SYSTEM.md      system prompt + guardrails contract (the brain)
   skills/        one SKILL.md directory per spec skill
   mcp.json       standard MCP server map (only when the spec declares servers)
+  mcp.ts         pi extension that loads mcp.json (--extension; ambient discovery stays off)
   config.json    name, model, trigger, guardrails — the facts guardrails.py reads
   guardrails.py  generic stop-file / allowlist / budget / receipt helper
   run.sh         sit/manual entrypoint (--dry-run prints the pi argv)
@@ -39,6 +40,7 @@ def generate(spec, out_dir) -> list[str]:
         e.write(f"skills/{skill['name']}/SKILL.md", _skill_md(skill, spec))
     if spec.mcp_servers:
         e.write("mcp.json", _mcp_json(spec))
+        e.write("mcp.ts", _MCP_TS)
     e.write("config.json", _config_json(spec))
     e.write("guardrails.py", _GUARDRAILS_PY)
     e.write("run.sh", _run_sh(spec), executable=True)
@@ -60,10 +62,19 @@ def generate(spec, out_dir) -> list[str]:
 def _pi_tools(spec) -> str:
     g = spec.guardrails
     if not g["allowed_side_effects"] or g["max_actions"] == 0:
-        return "read"
-    if _is_sit(spec):
-        return "read,bash"
-    return "read,bash,write"
+        tools = ["read"]
+    elif _is_sit(spec):
+        tools = ["read", "bash"]
+    else:
+        tools = ["read", "bash", "write"]
+    # pi --tools is a hard allowlist (built-in AND extension tools). MCP tool
+    # names from allowed_tools must be listed or they never become callable.
+    if spec.mcp_servers:
+        for name in g.get("allowed_tools") or []:
+            if name.endswith("/") or name in tools:
+                continue
+            tools.append(name)
+    return ",".join(tools)
 
 
 def _harness_json(spec) -> str:
@@ -72,6 +83,8 @@ def _harness_json(spec) -> str:
         "--no-session",
         "--no-extensions",
     ]
+    if spec.mcp_servers:
+        args += ["--extension", "mcp.ts"]
     if not spec.skills:
         args.append("--no-skills")
     args += [
@@ -199,6 +212,266 @@ def _mcp_json(spec) -> str:
                 entry[key] = srv[key]
         servers[name] = entry
     return json.dumps({"mcpServers": servers}, indent=2) + "\n"
+
+
+# Loaded with `pi --no-extensions --extension mcp.ts`. Reads mcp.json from cwd.
+# pi 0.84.1 has no --mcp-config; explicit -e still works under --no-extensions.
+_MCP_TS = r'''/**
+ * Register MCP tools from mcp.json. Do not copy mcp.json into ~/.pi.
+ */
+import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+function requireTool(name: string) {
+  const r = spawnSync("python3", ["guardrails.py", "check-tool", name], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    throw new Error((r.stderr || r.stdout || "tool refused").trim());
+  }
+}
+
+type ServerCfg = {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+};
+
+type RpcReply = { id?: number; result?: unknown; error?: { message?: string } };
+
+function loadServers(): Record<string, ServerCfg> {
+  const raw = JSON.parse(readFileSync(join(process.cwd(), "mcp.json"), "utf8"));
+  return (raw.mcpServers || {}) as Record<string, ServerCfg>;
+}
+
+function encode(msg: unknown): string {
+  return JSON.stringify(msg) + "\n";
+}
+
+class StdioClient {
+  proc: ReturnType<typeof spawn>;
+  pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  nextId = 1;
+  buf = "";
+
+  constructor(cfg: ServerCfg, cwd: string) {
+    this.proc = spawn(cfg.command!, cfg.args || [], {
+      cwd,
+      env: { ...process.env, ...(cfg.env || {}) },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    this.proc.stderr?.on("data", () => {});
+    this.proc.stdout?.setEncoding("utf8");
+    this.proc.stdout?.on("data", (chunk: string) => this.onData(chunk));
+    this.proc.on("exit", () => {
+      for (const p of this.pending.values()) p.reject(new Error("mcp server exited"));
+      this.pending.clear();
+    });
+  }
+
+  onData(chunk: string) {
+    this.buf += chunk;
+    while (this.buf.length) {
+      if (/^Content-Length:/i.test(this.buf)) {
+        const m = this.buf.match(/^Content-Length:\s*(\d+)/i);
+        const idx = this.buf.indexOf("\r\n\r\n");
+        if (!m || idx < 0) return;
+        const n = Number(m[1]);
+        const start = idx + 4;
+        if (this.buf.length < start + n) return;
+        this.dispatch(JSON.parse(this.buf.slice(start, start + n)));
+        this.buf = this.buf.slice(start + n);
+        continue;
+      }
+      const nl = this.buf.indexOf("\n");
+      if (nl < 0) return;
+      const line = this.buf.slice(0, nl).trim();
+      this.buf = this.buf.slice(nl + 1);
+      if (line) this.dispatch(JSON.parse(line));
+    }
+  }
+
+  dispatch(msg: RpcReply) {
+    if (msg.id == null) return;
+    const p = this.pending.get(msg.id);
+    if (!p) return;
+    this.pending.delete(msg.id);
+    if (msg.error) p.reject(new Error(msg.error.message || "mcp error"));
+    else p.resolve(msg.result);
+  }
+
+  call(method: string, params?: unknown): Promise<unknown> {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error("mcp timeout: " + method));
+      }, 30000);
+      this.pending.set(id, {
+        resolve: (v) => {
+          clearTimeout(t);
+          resolve(v);
+        },
+        reject: (e) => {
+          clearTimeout(t);
+          reject(e);
+        },
+      });
+      this.proc.stdin?.write(encode({ jsonrpc: "2.0", id, method, params }));
+    });
+  }
+
+  notify(method: string, params?: unknown) {
+    this.proc.stdin?.write(encode({ jsonrpc: "2.0", method, params }));
+  }
+
+  close() {
+    this.proc.kill();
+  }
+}
+
+class HttpClient {
+  url: string;
+  headers: Record<string, string>;
+  sessionId: string | undefined;
+  nextId = 1;
+
+  constructor(cfg: ServerCfg) {
+    this.url = cfg.url!;
+    this.headers = { ...(cfg.headers || {}) };
+  }
+
+  async post(payload: unknown): Promise<RpcReply> {
+    const res = await fetch(this.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
+        ...this.headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    const sid = res.headers.get("mcp-session-id");
+    if (sid) this.sessionId = sid;
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error("mcp http " + res.status + " " + text.slice(0, 200));
+    }
+    const ctype = (res.headers.get("content-type") || "").toLowerCase();
+    const sse =
+      ctype.includes("text/event-stream") || /^\s*(event:|data:)/m.test(text);
+    if (sse) {
+      const data = text
+        .split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).trim())
+        .filter(Boolean)
+        .join("\n");
+      if (!data) throw new Error("mcp empty sse");
+      return JSON.parse(data) as RpcReply;
+    }
+    return text ? (JSON.parse(text) as RpcReply) : {};
+  }
+
+  async call(method: string, params?: unknown): Promise<unknown> {
+    const parsed = await this.post({
+      jsonrpc: "2.0",
+      id: this.nextId++,
+      method,
+      params,
+    });
+    if (parsed.error) throw new Error(parsed.error.message || "mcp error");
+    return parsed.result;
+  }
+
+  async notify(method: string, params?: unknown) {
+    await this.post({ jsonrpc: "2.0", method, params });
+  }
+
+  close() {}
+}
+
+type Client = StdioClient | HttpClient;
+
+async function handshake(client: Client) {
+  await client.call("initialize", {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "agent-forge", version: "1" },
+  });
+  await Promise.resolve(client.notify("notifications/initialized"));
+}
+
+export default async function (pi: ExtensionAPI) {
+  const cwd = process.cwd();
+  const clients: Client[] = [];
+  pi.on("session_shutdown", () => {
+    for (const c of clients) c.close();
+  });
+  for (const [name, cfg] of Object.entries(loadServers())) {
+    const client: Client = cfg.command
+      ? new StdioClient(cfg, cwd)
+      : new HttpClient(cfg);
+    clients.push(client);
+    try {
+      await handshake(client);
+      let cursor: string | undefined;
+      do {
+        const listed = (await client.call(
+          "tools/list",
+          cursor ? { cursor } : {},
+        )) as { tools?: { name: string; description?: string; inputSchema?: object }[]; nextCursor?: string };
+        for (const tool of listed.tools || []) {
+          const schema = tool.inputSchema ?? { type: "object", properties: {} };
+          pi.registerTool({
+            name: tool.name,
+            label: tool.name,
+            description: tool.description || name + " MCP tool",
+            parameters: schema as never,
+            async execute(_id, params) {
+              requireTool(tool.name);
+              const result = (await client.call("tools/call", {
+                name: tool.name,
+                arguments: params,
+              })) as {
+                content?: { type?: string; text?: string }[];
+                isError?: boolean;
+              };
+              const text = (result.content || [])
+                .map((part) =>
+                  part.type === "text" ? part.text : JSON.stringify(part),
+                )
+                .join("\n");
+              return {
+                content: [
+                  {
+                    type: "text" as const,
+                    text: text || (result.isError ? "error" : "ok"),
+                  },
+                ],
+                details: { server: name, isError: !!result.isError },
+                isError: !!result.isError,
+              };
+            },
+          });
+        }
+        cursor = listed.nextCursor;
+      } while (cursor);
+    } catch (err) {
+      client.close();
+      const i = clients.indexOf(client);
+      if (i >= 0) clients.splice(i, 1);
+      throw err;
+    }
+  }
+}
+'''
 
 
 def _config_json(spec) -> str:
@@ -571,7 +844,7 @@ Every run writes `{g['receipt']['path']}`: verdict, actions, note, ts.
 
 ## MCP servers
 
-{"See `mcp.json` — point your runtime's MCP config at it." if spec.mcp_servers else "This agent declares no MCP servers."}
+{"`run.sh` loads `mcp.json` via `pi --no-extensions --extension mcp.ts` (explicit `-e` still works under `--no-extensions`; there is no `--mcp-config`). Do not copy `mcp.json` into `~/.pi`. `guardrails.allowed_tools` names are also passed to `pi --tools` so those MCP tools pass pi's allowlist. Each MCP tool call runs `python3 guardrails.py check-tool NAME` first." if spec.mcp_servers else "This agent declares no MCP servers. `python3 guardrails.py check-tool NAME` still gates `allowed_tools` (omitted list = all tools)."}
 {sched}"""
 
 
@@ -584,6 +857,7 @@ Reads config.json (guardrails section) from the bundle directory:
 - stopped()          stop-file check; a present stop file pauses the agent
 - allow(action)      allowlist + per-run budget check
 - require(action)    allow() or exit 1
+- check-tool NAME    allowed_tools gate (omitted list = all tools)
 - put RELPATH        require write-file:RELPATH, then stdin → file
 - write_receipt()    append the run receipt JSON
 - lock-acquire/drop  overlap lock for cron sitters
@@ -617,6 +891,22 @@ def _matches(pattern: str, action: str) -> bool:
     if pattern.endswith("/"):
         return action.startswith(pattern)
     return action == pattern
+
+
+def check_tool(name: str) -> str | None:
+    """None if allowed. Omitted allowed_tools means all tools."""
+    allowed = GUARDRAILS.get("allowed_tools")
+    if allowed is None:
+        return None
+    if any(_matches(p, name) for p in allowed):
+        return None
+    return "guardrails: tool %r is not in allowed_tools" % name
+
+
+def require_tool(name: str) -> None:
+    msg = check_tool(name)
+    if msg:
+        raise SystemExit(msg)
 
 
 def _this_run_allows(action: str) -> bool:
@@ -783,12 +1073,15 @@ def run_pi(argv: list, log_path) -> int:
 if __name__ == "__main__":
     # CLI:
     #   guardrails.py require <action>
+    #   guardrails.py check-tool <name>
     #   guardrails.py put <relpath>   (stdin → file)
     #   guardrails.py write-receipt <verdict> <note> [action ...]
     #   guardrails.py lock-acquire | lock-drop
     #   guardrails.py run-pi <log> -- <argv...>
     if len(sys.argv) >= 3 and sys.argv[1] == "require":
         Budget().require(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "check-tool":
+        require_tool(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == "put":
         put(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "write-receipt":

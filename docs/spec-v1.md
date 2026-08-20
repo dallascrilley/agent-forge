@@ -31,7 +31,7 @@ validator in `forge/spec.py` is the authority;
 | `allowed_side_effects` | string[] | `[]` (read-only) | Side-effect action names the agent may perform, budgeted by `max_actions`. |
 | `stop_file` | path | `<name>.stop` | Present file ⇒ agent pauses: writes a `paused` receipt, exits. |
 | `receipt.path` | path | `receipts/last.json` | Where the run receipt is written. |
-| `llm_optional` | bool | `true` | A run with nothing to do must complete without invoking the model. pi-mono cron sitters enforce this in `run.sh` (empty gather → quiet receipt, no `pi`). Sitters also take a 12-minute overlap lock and a 180s pi timeout (`SIT_LOCK_SEC` / `SIT_TIMEOUT_SEC`). pi-mono `--tools` is `read` when there are no side effects, `read,bash` for sitters (writes go through `guardrails.py put`), otherwise `read,bash,write`. |
+| `llm_optional` | bool | `true` | A run with nothing to do must complete without invoking the model. pi-mono cron sitters enforce this in `run.sh` (empty gather → quiet receipt, no `pi`). Sitters also take a 12-minute overlap lock and a 180s pi timeout (`SIT_LOCK_SEC` / `SIT_TIMEOUT_SEC`). pi-mono `--tools` is `read` when there are no side effects, `read,bash` for sitters (writes go through `guardrails.py put`), otherwise `read,bash,write`. When `mcp_servers` is set, pi-mono also emits `mcp.ts` and passes `--extension mcp.ts` (ambient `--no-extensions` stays; installed `pi` 0.84.1 has no `--mcp-config`, but explicit `-e` still loads). Names in `allowed_tools` are appended to `--tools` so those MCP tools pass pi's allowlist. |
 | `max_actions` | int ≥ 0 | `3` | Per-run cap on side-effecting actions. |
 
 ## Receipt schema
@@ -52,8 +52,11 @@ Every run of a generated agent ends with one JSON receipt:
 - `actions` — side-effecting actions taken (allowlisted, budgeted).
 - `tool_calls` / `refused` — every tool invocation and every guardrails
   refusal. Recorded **mechanically** by runtimes that wrap tools (LangGraph).
-  pi-mono receipts are model-reported via `guardrails.py write-receipt` and
-  carry `verdict`/`actions`/`note`/`ts`.
+  pi-mono MCP calls run `python3 guardrails.py check-tool NAME` first
+  (prefix match when a pattern ends in `/`; omitted `allowed_tools` allows
+  all). pi-mono receipts stay model-reported via
+  `guardrails.py write-receipt` and carry `verdict`/`actions`/`note`/`ts`
+  only — they do not record `tool_calls` / `refused`.
 
 ## Validation rules that bite
 

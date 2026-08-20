@@ -28,4 +28,4 @@ Every run writes `receipts/doc-assistant-last.json`: verdict, actions, note, ts.
 
 ## MCP servers
 
-See `mcp.json` — point your runtime's MCP config at it.
+`run.sh` loads `mcp.json` via `pi --no-extensions --extension mcp.ts` (explicit `-e` still works under `--no-extensions`; there is no `--mcp-config`). Do not copy `mcp.json` into `~/.pi`. `guardrails.allowed_tools` names are also passed to `pi --tools` so those MCP tools pass pi's allowlist. Each MCP tool call runs `python3 guardrails.py check-tool NAME` first.

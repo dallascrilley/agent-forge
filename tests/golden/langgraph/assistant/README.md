@@ -28,6 +28,10 @@ langgraph dev                    # local dev server with the graph UI
 
 Every run writes `receipts/doc-assistant-last.json` (verdict, actions, note, ts).
 
+## Skills
+
+Spec skills are in `skills/<name>/SKILL.md` and listed in the system prompt. LangGraph has no native skill loader.
+
 ## Scheduling
 
 See `SCHEDULING.md` — no LangSmith required.

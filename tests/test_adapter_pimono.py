@@ -232,10 +232,11 @@ def test_missing_pi_writes_blocked_receipt(tmp_path):
         text=True,
         timeout=15,
     )
-    assert proc.returncode == 1
+    assert proc.returncode == 1, proc.stderr
     receipt = json.loads((tmp_path / "receipts" / "last.json").read_text())
     assert receipt["verdict"] == "blocked"
     assert "not on PATH" in receipt["note"]
+    assert (tmp_path / "sit.pi.log").read_text().startswith("pi ")
     assert not (tmp_path / "hn-ai-sitter.lock").exists()
 
 

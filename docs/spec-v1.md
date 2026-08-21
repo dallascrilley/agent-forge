@@ -14,7 +14,7 @@ validator in `forge/spec.py` is the authority;
 | `purpose` | string | yes | What the agent is for, in operator language. Rendered prominently into every system prompt. |
 | `model` | string | yes | Runtime-native model id, e.g. `openai-codex/gpt-5.4-mini`. |
 | `model_overrides` | object | no | Per-runtime model ids (`{"langgraph": "openai/gpt-5-mini"}`) that replace `model` for that runtime. Use when runtimes have different native providers — e.g. Codex OAuth (`openai-codex/…`) works in the pi CLI but has no LangChain integration. |
-| `runtimes` | array | yes | Non-empty, unique subset of `["pimono", "langgraph"]`. |
+| `runtimes` | array | yes | Non-empty, unique subset of `["pimono", "langgraph", "eve"]`. |
 | `description` | string | no | One-line human summary. |
 | `system_prompt` | object | no | `{"inline": "…md…"}` or `{"file": "path/rel/to/spec"}`. |
 | `skills` | array | no | `[{name, description, body\|file}]` — one SKILL.md dir per entry. |
@@ -51,7 +51,8 @@ Every run of a generated agent ends with one JSON receipt:
 
 - `actions` — side-effecting actions taken (allowlisted, budgeted).
 - `tool_calls` / `refused` — every tool invocation and every guardrails
-  refusal. Recorded **mechanically** by runtimes that wrap tools (LangGraph).
+  refusal. Recorded mechanically by runtimes that wrap tools (LangGraph and
+  Eve's generated `runGuarded` call sites).
   pi-mono MCP calls run `python3 guardrails.py check-tool NAME` first
   (prefix match when a pattern ends in `/`; omitted `allowed_tools` allows
   all). pi-mono receipts stay model-reported via

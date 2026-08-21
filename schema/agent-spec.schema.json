@@ -109,7 +109,7 @@
           "name": { "type": "string", "minLength": 1 },
           "runtimes": {
             "type": "array",
-            "items": { "enum": ["pimono", "langgraph"] }
+            "items": { "enum": ["pimono", "langgraph", "eve"] }
           },
           "config": { "type": "object" }
         }
@@ -122,7 +122,7 @@
     },
     "model_overrides": {
       "type": "object",
-      "propertyNames": { "enum": ["pimono", "langgraph"] },
+      "propertyNames": { "enum": ["pimono", "langgraph", "eve"] },
       "additionalProperties": { "type": "string", "minLength": 1 },
       "description": "Per-runtime model ids that replace model for that runtime. Use when runtimes have different native providers (e.g. openai-codex for pi-mono, openai for LangGraph)."
     },
@@ -130,7 +130,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["pimono", "langgraph"] },
+      "items": { "enum": ["pimono", "langgraph", "eve"] },
       "description": "Runtimes this spec targets. Each listed runtime must have an installed adapter at generation time."
     },
     "trigger": {

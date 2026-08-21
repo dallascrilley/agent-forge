@@ -1,0 +1,11 @@
+{
+  "name": "doc-assistant",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "eve dev"
+  },
+  "dependencies": {
+    "eve": "latest"
+  }
+}

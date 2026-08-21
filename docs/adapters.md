@@ -37,14 +37,16 @@ tracks paths, sets the executable bit).
 7. **No private facts.** `tests/test_no_private_facts.py` scans the repo;
    generated output must not contain machine-specific absolute paths.
 
-## Good first adapters
+## Implemented and deferred runtimes
 
-- **eve** (github.com/vercel/eve): spec fields map nearly 1:1 —
-  `system_prompt` → `instructions.md`, `skills` → `skills/*.md`,
-  `trigger.cron` → `schedules/`, `mcp_servers` → external tools.
-- **hermes** (github.com/NousResearch/hermes-agent): `system_prompt` →
-  `SOUL.md`, `skills` → SKILL.md dirs (agentskills.io standard), MCP and
-  cron are first-class.
+- **eve** (github.com/vercel/eve): implemented by `forge/adapters/eve.py`.
+  `system_prompt` maps to `agent/instructions.md`, `skills` to
+  `agent/skills/*.md`, `trigger.cron` to `agent/schedules/`, and `mcp_servers`
+  to `agent/tools/mcp-servers.json` for external-tool wiring.
+- **hermes** (github.com/NousResearch/hermes-agent) remains deferred:
+  `system_prompt` → `SOUL.md`, `skills` → SKILL.md dirs (agentskills.io
+  standard), MCP and cron are first-class.
 
-Both are intentionally deferred from the MVP so the spec can stabilize on
-two adapters first — they make excellent initial external contributions.
+Eve is the first extra runtime; add another adapter only after confirming its
+current on-disk layout and adding golden fixtures plus guardrail call-site
+tests.

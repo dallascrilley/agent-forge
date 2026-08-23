@@ -1,6 +1,6 @@
 # Agent Forge Conductor — roadmap
 
-- Status: accepted phased baseline; Phase 1 and Phase 2 complete, Phase 3 implementation not started
+- Status: accepted phased baseline; Phase 1 through Phase 3 complete, Phase 4 launch canary proven
 - Depends on: [working specification](spec.md)
 - Tracking: `af-ezi`
 
@@ -129,6 +129,7 @@ Deliverables:
 - Orca backend adapter using native Run, Task, Dispatch, Delivery, and worker lifecycle operations
 - capability/version preflight
 - observed canary for manifest-specific Pi argv plus `worker-start --terminal` supervision
+- selected interactive-terminal launch contract; RPC preamble injection is explicitly rejected
 - persisted Run, Task, Dispatch, Delivery, worktree, and terminal identities
 - exact `--retry-request` handling for unknown mutation outcomes
 - stale-handle recovery

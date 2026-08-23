@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
-- Status: accepted design baseline; Phase 1 and Phase 2 complete, Phase 3 implementation not started
-- Version: 0.9-draft
+- Status: accepted design baseline; Phase 1 through Phase 3 complete, Phase 4 launch canary proven
+- Version: 1.0-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -16,6 +16,7 @@
 - `0.7-draft`: fixed deterministic recipe/resource selection, structured policy rejection, trusted context-file selection, and exact WorkerManifest compilation.
 - `0.8-draft`: hardened canonical context aliases, optional capability closure, and catalog source credential rejection from Phase 1 review evidence.
 - `0.9-draft`: implemented durable ledger, legal transition reduction, bounded DAG scheduling, restart-safe fake backend, and projection recovery from Phase 2 evidence.
+- `1.0-draft`: selected and observed the manifest-specific Pi launch shape under Orca supervision; rejected RPC injection for this path.
 
 ## Change discipline
 
@@ -695,7 +696,15 @@ Mapping:
 
 The backend persists Run, Task, Dispatch, Delivery, worktree, and terminal identities. Unknown mutation outcomes follow Orca's exact `--retry-request` recovery guidance; they do not trigger a guessed replacement.
 
-A remaining launch gap must be proven before implementation: `worker-start --agent pi` does not expose arbitrary Pi extension, skill, prompt-template, tool, or system-prompt argv. The likely bounded path is to start a manifest-specific Pi command in an Orca terminal and attach it with `worker-start --terminal`, but ownership, cleanup, setup sequencing, and prompt injection require an observed canary. The spec does not declare that path solved yet.
+The observed launch canary (Beads `af-ezi.4.1`, Run `run_dbf569fcf2a3`, Task `task_e6c956d01c4e`, Dispatch `ctx_96c79817e3af`) selects the bounded terminal-attachment path. `worker-start --agent pi` remains rejected for manifest-specific argv. The supported shape is:
+
+1. Create a Pi terminal with the complete manifest-owned command and wait for interactive readiness.
+2. Attach it with `orca orchestration worker-start --task <task> --terminal <handle> --worktree current --run <run> --retry-of <prior-dispatch-if-needed> --json`.
+3. Use an interactive Pi terminal, not `--mode rpc`: Orca's plain injected preamble is accepted by the interactive TUI, while RPC input rejects the preamble as non-JSON and fails at `dispatch_input`.
+4. The canary command carried the exact extension, system fragment, model, and tool argv: `--model openai-codex/gpt-5.6-luna --thinking off --no-session --no-extensions --tools read,grep,find,ls --extension extensions/agent-forge-conductor.ts --append-system-prompt catalog/prompts/worker-protocol.md`; root `AGENTS.md` was loaded by Pi's context discovery and no skill was declared.
+5. `worker_done` settles the Dispatch exactly once; `worker-release` preserves an externally owned terminal rather than closing it. The terminal creator owns final cleanup. The canary's Pi terminal exited and `terminal list` showed no residual canary terminal; the current worktree was unchanged.
+
+This is a launch contract, not the full Orca adapter. Production code must persist every returned Run/Task/Dispatch/terminal identity, use the exact retry receipt for unknown creation results, and distinguish externally owned terminals from adapter-owned terminals before cleanup.
 
 ### Local Pi backend — post-v1
 

@@ -25,8 +25,8 @@ The design sources were established in commit `1480626` before implementation be
 
 - Root epic: `af-ezi`
 - Capability phases: 8
-- Total nodes: 58
-- Dependency edges: 100
+- Total nodes: 59
+- Dependency edges: 102
 - Phase review gates: 8
 - Final readiness gate: `af-ezi.9`
 
@@ -45,16 +45,16 @@ Every phase ends in an independent review gate. The final gate depends on all ph
 
 ## Ready frontier
 
-Phase 1 and Phase 2 implementation leaves, discovered fixes, and review gates are closed. The next non-epic action is the Phase 3 implementation frontier:
+Phase 1 through Phase 3 implementation leaves, discovered fixes, and review gates are closed. The manifest-specific Pi launch canary is the next non-epic action:
 
-1. `af-ezi.3.1` — expose one typed delegate tool from a thin Pi extension
+1. `af-ezi.4.1` — prove manifest-specific Pi launch under Orca supervision
 
 Inspect before claiming:
 
 ```bash
-bd show af-ezi.3.1 --json
+bd show af-ezi.4.1 --json
 bd ready --json
-bd update af-ezi.3.1 --claim --json
+bd update af-ezi.4.1 --claim --json
 ```
 
 There is no project `bin/work-items` adapter, so raw `bd --json` owns selection, claim, notes, dependencies, and close operations.
@@ -85,7 +85,7 @@ Observed:
 - no dependency cycles
 - the original 54-node graph passed tracker conventions
 - no tracker orphans
-- after Phase 1 and Phase 2 implementation, review, and discovered-fix beads, the non-epic ready frontier is `af-ezi.3.1`
+- after Phase 1 through Phase 3 implementation, review, discovered fixes, and the launch canary, the non-epic ready frontier is `af-ezi.4.1`
 - every phase gate depends on all required phase leaves
 - the final gate depends on all eight phase gates
 
@@ -93,7 +93,7 @@ The installed Beads CLI has no native critical-path command. A read-only graph a
 
 ## Current implementation state
 
-The primary checkout contains the completed Phase 1 and Phase 2 implementation. Phase 1 commits `b4b6943` through `d43cbb0` implement the contracts, catalog compiler, canonical documents, resolver, and reviewed security fixes. Phase 2 commits `aa7b1f3`, `b75e810`, `ec786d6`, `13a0f3a`, and `5cc2c38` implement the durable ledger, reducer, bounded scheduler, restart-safe fake backend, and projection-recovery fix. Gates `af-ezi.1.6` and `af-ezi.2.5` are closed. The next implementation frontier is `af-ezi.3.1`.
+The primary checkout contains the completed Phase 1 through Phase 3 implementation. Phase 1 commits `b4b6943` through `d43cbb0` implement the contracts, catalog compiler, canonical documents, resolver, and reviewed security fixes. Phase 2 commits `aa7b1f3`, `b75e810`, `ec786d6`, `13a0f3a`, and `5cc2c38` implement the durable ledger, reducer, bounded scheduler, restart-safe fake backend, and projection-recovery fix. Phase 3 commits `c77f785`, `594a7b3`, `e264f58`, and `26b4eeb` implement the typed delegate, `/workers`, compaction digest, and orphan diagnostics. Gates `af-ezi.1.6`, `af-ezi.2.5`, and `af-ezi.3.4` are closed. The launch canary is recorded in `docs/orchestrator/spec.md` under Run `run_dbf569fcf2a3`; the next implementation frontier is `af-ezi.4.1`.
 
 ## Recovery from context loss
 

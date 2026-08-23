@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
-- Status: accepted design baseline; Phase 1 implementation complete, independent gate pending
-- Version: 0.8-draft
+- Status: accepted design baseline; Phase 1 and Phase 2 complete, Phase 3 implementation not started
+- Version: 0.9-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -15,6 +15,7 @@
 - `0.6-draft`: implemented the closed catalog-source layout, safe YAML compiler, approved resource roots, compatibility/hash checks, and representative locked v1 recipes.
 - `0.7-draft`: fixed deterministic recipe/resource selection, structured policy rejection, trusted context-file selection, and exact WorkerManifest compilation.
 - `0.8-draft`: hardened canonical context aliases, optional capability closure, and catalog source credential rejection from Phase 1 review evidence.
+- `0.9-draft`: implemented durable ledger, legal transition reduction, bounded DAG scheduling, restart-safe fake backend, and projection recovery from Phase 2 evidence.
 
 ## Change discipline
 

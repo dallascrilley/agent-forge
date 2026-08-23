@@ -25,8 +25,8 @@ The design sources were established in commit `1480626` before implementation be
 
 - Root epic: `af-ezi`
 - Capability phases: 8
-- Total nodes: 57
-- Dependency edges: 98
+- Total nodes: 58
+- Dependency edges: 100
 - Phase review gates: 8
 - Final readiness gate: `af-ezi.9`
 
@@ -45,16 +45,16 @@ Every phase ends in an independent review gate. The final gate depends on all ph
 
 ## Ready frontier
 
-Phase 1 implementation leaves `af-ezi.1.1` through `af-ezi.1.5` and the audit fixes `af-ezi.1.7` through `af-ezi.1.9` are closed. The next non-epic action is the independent review gate:
+Phase 1 and Phase 2 implementation leaves, discovered fixes, and review gates are closed. The next non-epic action is the Phase 3 implementation frontier:
 
-1. `af-ezi.1.6` — verify deterministic manifest compilation
+1. `af-ezi.3.1` — expose one typed delegate tool from a thin Pi extension
 
 Inspect before claiming:
 
 ```bash
-bd show af-ezi.1.6 --json
+bd show af-ezi.3.1 --json
 bd ready --json
-bd update af-ezi.1.6 --claim --json
+bd update af-ezi.3.1 --claim --json
 ```
 
 There is no project `bin/work-items` adapter, so raw `bd --json` owns selection, claim, notes, dependencies, and close operations.
@@ -85,15 +85,15 @@ Observed:
 - no dependency cycles
 - the original 54-node graph passed tracker conventions
 - no tracker orphans
-- after Phase 1 implementation and three discovered-fix beads, the non-epic ready frontier is `af-ezi.1.6`
+- after Phase 1 and Phase 2 implementation, review, and discovered-fix beads, the non-epic ready frontier is `af-ezi.3.1`
 - every phase gate depends on all required phase leaves
 - the final gate depends on all eight phase gates
 
 The installed Beads CLI has no native critical-path command. A read-only graph audit computed a 36-node longest path for the original graph; dependency edges in Beads, not that cached calculation, remain authoritative.
 
-## Current Phase 1 implementation state
+## Current implementation state
 
-The implementation worktree is `dallascrilley/pi-conductor-phase-1`. Commits `b4b6943` through `c74a255` implement the Phase 1 contract, catalog compiler, canonical documents, and resolver. Commits `f7f8284`, `356a563`, and `7ce16ec` close the independently discovered context-alias, optional-capability, and source-credential blockers. The worktree is clean; the phase gate remains open until its review evidence is accepted.
+The primary checkout contains the completed Phase 1 and Phase 2 implementation. Phase 1 commits `b4b6943` through `d43cbb0` implement the contracts, catalog compiler, canonical documents, resolver, and reviewed security fixes. Phase 2 commits `aa7b1f3`, `b75e810`, `ec786d6`, `13a0f3a`, and `5cc2c38` implement the durable ledger, reducer, bounded scheduler, restart-safe fake backend, and projection-recovery fix. Gates `af-ezi.1.6` and `af-ezi.2.5` are closed. The next implementation frontier is `af-ezi.3.1`.
 
 ## Recovery from context loss
 

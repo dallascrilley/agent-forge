@@ -1,0 +1,13 @@
+schemaVersion: 1
+recipe:
+  id: change-reviewer
+  capabilities:
+    required: [code.search, git.review]
+    optional: [code.test]
+  resourceIds: [policy.evidence, role.change-reviewer, role.repo-scout, system.worker-protocol]
+  permissionProfile: review
+  workspaceMode: isolated-readonly
+  modelTier: fast
+  tools: [read, grep, find, ls, verify]
+  budget:
+    timeoutSeconds: 300

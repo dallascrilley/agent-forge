@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
 - Status: accepted design baseline; Phase 1 implementation in progress
-- Version: 0.5-draft
+- Version: 0.6-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -12,6 +12,7 @@
 - `0.3-draft`: chose PyYAML as a catalog-compiler-only optional dependency while preserving the stdlib-only Agent Spec v1 generator path.
 - `0.4-draft`: established closed companion orchestration contract v1 schemas and authoritative stdlib validators without revising Agent Spec v1.
 - `0.5-draft`: fixed canonical JSON, content-identity exclusions, and atomic-write rules for locked Phase 1 documents.
+- `0.6-draft`: implemented the closed catalog-source layout, safe YAML compiler, approved resource roots, compatibility/hash checks, and representative locked v1 recipes.
 
 ## Change discipline
 
@@ -285,17 +286,19 @@ On conductor startup, after compaction, or `/workers resume`:
 
 ```text
 catalog/
-  capabilities.yaml
-  resources/
-  recipes/
-  roles/
-  prompts/
-  policies/
-  models.yaml
+  capabilities.yaml          # {schemaVersion, capabilities}
+  resources/*.yaml           # one {schemaVersion, resource} descriptor each
+  recipes/*.yaml             # one {schemaVersion, recipe} descriptor each
+  roles/                     # hashed role bodies
+  prompts/                   # hashed prompt/system fragments
+  policies/                  # hashed policy fragments
+  models.yaml                # {schemaVersion, models}
   catalog.lock.json
 ```
 
 `catalog.lock.json` is generated and committed when the catalog is meant to travel with the repository. Personal catalog overlays may live in dotfiles, but they compile into the same lock format.
+
+The shipped compiler aggregates those fragments into the closed `CatalogSource` contract, sorts entries by stable ID, resolves each declared path beneath a kind-specific approved root, hashes bytes without importing or executing them, checks the authored hash and Pi compatibility range, validates references/providers/conflicts/profile policy/model tiers, binds `sourceHash` and `lockId`, and atomically emits the closed `CatalogLock`. Missing files, symlink/traversal escapes, unhashed or changed content, unavailable capabilities, duplicate exclusive providers, literal credential fields, and incompatible Pi versions fail before output replacement. The base command targets Pi `0.84.0`; another exact target can be supplied with `--pi-version`.
 
 ### Catalog authoring dependency boundary
 
@@ -315,7 +318,7 @@ The catalog command must import the YAML parser only on its YAML authoring path.
 catalog compilation requires PyYAML; install it with: python3 -m pip install -r requirements-catalog.txt
 ```
 
-Compilation uses `yaml.safe_load`, then applies the authoritative closed catalog validator; YAML constructors cannot create project objects. The compiler must not silently accept JSON as a replacement authoring contract, invoke a system YAML executable, auto-install the dependency, or modify an existing lockfile after dependency or parse failure.
+Compilation uses a closed subclass of PyYAML `SafeLoader`, then applies the authoritative closed catalog validator; YAML constructors cannot create project objects, aliases and duplicate mapping keys are rejected, and exactly one YAML document is allowed per source file. The compiler must not silently accept JSON as a replacement authoring contract, invoke a system YAML executable, auto-install the dependency, or modify an existing lockfile after dependency or parse failure.
 
 Compatibility and migration behavior:
 

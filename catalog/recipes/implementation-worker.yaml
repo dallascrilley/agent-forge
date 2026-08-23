@@ -1,0 +1,13 @@
+schemaVersion: 1
+recipe:
+  id: implementation-worker
+  capabilities:
+    required: [code.search, code.modify, code.test]
+    optional: []
+  resourceIds: [policy.evidence, role.implementation-worker, role.repo-scout, system.worker-protocol]
+  permissionProfile: modify-isolated
+  workspaceMode: isolated-worktree
+  modelTier: deep
+  tools: [read, grep, find, ls, bash, edit, write, verify]
+  budget:
+    timeoutSeconds: 1800

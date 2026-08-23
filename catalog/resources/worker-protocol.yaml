@@ -1,0 +1,19 @@
+schemaVersion: 1
+resource:
+  id: system.worker-protocol
+  kind: system-fragment
+  version: 1.0.0
+  source: catalog:prompts/worker-protocol.md
+  path: prompts/worker-protocol.md
+  sha256: sha256:94f29a4d5e01b63c000b5ffdef7dd5a724c4a95bacc0d7794bfd039275004845
+  provides: []
+  requires: []
+  conflicts: []
+  backends: [orca-pi, local-pi]
+  piCompatibility: ">=0.84.0 <0.85.0"
+  trust: audited
+  startupCost: low
+  runtimeRisk: none
+  permissions: [observe, research, modify-isolated, review]
+  credentialEnv: []
+  tools: []

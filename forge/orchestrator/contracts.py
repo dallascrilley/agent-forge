@@ -224,6 +224,17 @@ _CATALOG_LOCK = _object(
     },
 )
 
+_CATALOG_SOURCE = copy.deepcopy(_CATALOG_LOCK)
+_CATALOG_SOURCE["required"] = [
+    field for field in _CATALOG_SOURCE["required"] if field not in {"lockId", "sourceHash"}
+]
+del _CATALOG_SOURCE["properties"]["lockId"]
+del _CATALOG_SOURCE["properties"]["sourceHash"]
+# Authored paths are checked after filesystem resolution so absolute, traversal,
+# and symlink escapes receive one grounded catalog-root error.
+_CATALOG_SOURCE["properties"]["resources"]["items"]["properties"]["path"] = _NONEMPTY
+
+
 _WORKER_REQUEST = _object(
     (
         "schemaVersion", "task", "acceptanceCriteria", "capabilities", "recipe",
@@ -476,6 +487,7 @@ def _root_schema(kind: str, title: str, body: dict[str, Any]) -> dict[str, Any]:
 
 
 SCHEMAS = {
+    "catalog-source": _root_schema("catalog-source", "CatalogSource", _CATALOG_SOURCE),
     "catalog-lock": _root_schema("catalog-lock", "CatalogLock", _CATALOG_LOCK),
     "worker-request": _root_schema("worker-request", "WorkerRequest", _WORKER_REQUEST),
     "worker-manifest": _root_schema("worker-manifest", "WorkerManifest", _WORKER_MANIFEST),
@@ -520,6 +532,10 @@ class ContractDocument:
         return _thaw(self._value)
 
 
+class CatalogSource(ContractDocument):
+    contract_kind = "catalog-source"
+
+
 class CatalogLock(ContractDocument):
     contract_kind = "catalog-lock"
 
@@ -551,6 +567,7 @@ class ReviewResult(ContractDocument):
 CONTRACT_TYPES = {
     contract.contract_kind: contract
     for contract in (
+        CatalogSource,
         CatalogLock,
         WorkerRequest,
         WorkerManifest,
@@ -707,6 +724,7 @@ def _cross_review_result(data: dict[str, Any], problems: list[ContractProblem]) 
 
 
 _CROSS_VALIDATORS = {
+    "catalog-source": _cross_catalog_lock,
     "catalog-lock": _cross_catalog_lock,
     "worker-request": _cross_worker_request,
     "worker-manifest": _cross_worker_manifest,

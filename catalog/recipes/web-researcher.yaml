@@ -1,0 +1,13 @@
+schemaVersion: 1
+recipe:
+  id: web-researcher
+  capabilities:
+    required: [web.research]
+    optional: []
+  resourceIds: [policy.evidence, role.web-researcher, system.worker-protocol]
+  permissionProfile: research
+  workspaceMode: shared-readonly
+  modelTier: balanced
+  tools: [read, web]
+  budget:
+    timeoutSeconds: 900

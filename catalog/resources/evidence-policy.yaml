@@ -1,0 +1,19 @@
+schemaVersion: 1
+resource:
+  id: policy.evidence
+  kind: prompt-template
+  version: 1.0.0
+  source: catalog:policies/evidence.md
+  path: policies/evidence.md
+  sha256: sha256:135bdf201fa8b067fb1f8f349f6402dd56a24b2b8a8c5ac6c14f67e22d449406
+  provides: []
+  requires: []
+  conflicts: []
+  backends: [orca-pi, local-pi]
+  piCompatibility: ">=0.84.0 <0.85.0"
+  trust: audited
+  startupCost: low
+  runtimeRisk: none
+  permissions: [observe, research, modify-isolated, review]
+  credentialEnv: []
+  tools: []

@@ -48,6 +48,16 @@ cd agent-forge
 
 There is nothing to install. `forge/cli.py` runs on any python3.
 
+Catalog authoring is a separate optional path and does not change that generator contract:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-catalog.txt
+.venv/bin/python -m forge.catalog compile catalog --output catalog/catalog.lock.json
+```
+
+Without the optional dependency, only the catalog command exits with an actionable PyYAML installation error. Existing Agent Spec v1 validation and generation remain stdlib-only.
+
 ## Quickstart
 
 ### The 60-second version

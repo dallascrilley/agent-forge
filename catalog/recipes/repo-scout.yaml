@@ -1,0 +1,13 @@
+schemaVersion: 1
+recipe:
+  id: repo-scout
+  capabilities:
+    required: [code.search]
+    optional: []
+  resourceIds: [policy.evidence, role.repo-scout, system.worker-protocol]
+  permissionProfile: observe
+  workspaceMode: shared-readonly
+  modelTier: fast
+  tools: [read, grep, find, ls]
+  budget:
+    timeoutSeconds: 600

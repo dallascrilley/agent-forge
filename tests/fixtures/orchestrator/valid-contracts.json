@@ -1,11 +1,15 @@
 {
-  "catalog-lock": {
+  "catalog-source": {
     "schemaVersion": 1,
-    "lockId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "sourceHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "capabilities": [
-      {"id": "code.search", "mode": "exclusive"},
-      {"id": "code.modify", "mode": "additive"}
+      {
+        "id": "code.search",
+        "mode": "exclusive"
+      },
+      {
+        "id": "code.modify",
+        "mode": "additive"
+      }
     ],
     "resources": [
       {
@@ -15,45 +19,171 @@
         "source": "catalog:resources/repo-scout.md",
         "path": "resources/repo-scout.md",
         "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "provides": ["code.search"],
+        "provides": [
+          "code.search"
+        ],
         "requires": [],
         "conflicts": [],
-        "backends": ["orca-pi", "local-pi"],
+        "backends": [
+          "orca-pi",
+          "local-pi"
+        ],
         "piCompatibility": ">=0.84.0 <0.85.0",
         "trust": "audited",
         "startupCost": "low",
         "runtimeRisk": "none",
-        "permissions": ["observe"],
+        "permissions": [
+          "observe"
+        ],
         "credentialEnv": [],
-        "tools": ["read", "grep", "find", "ls"]
+        "tools": [
+          "read",
+          "grep",
+          "find",
+          "ls"
+        ]
       }
     ],
     "recipes": [
       {
         "id": "repo-scout",
-        "capabilities": {"required": ["code.search"], "optional": []},
-        "resourceIds": ["skill.repo-scout"],
+        "capabilities": {
+          "required": [
+            "code.search"
+          ],
+          "optional": []
+        },
+        "resourceIds": [
+          "skill.repo-scout"
+        ],
         "permissionProfile": "observe",
         "workspaceMode": "shared-readonly",
         "modelTier": "fast",
-        "tools": ["read", "grep", "find", "ls"],
-        "budget": {"timeoutSeconds": 600}
+        "tools": [
+          "read",
+          "grep",
+          "find",
+          "ls"
+        ],
+        "budget": {
+          "timeoutSeconds": 600
+        }
       }
     ],
     "models": [
-      {"tier": "fast", "provider": "openai-codex", "id": "gpt-5-mini", "thinking": "low"}
+      {
+        "tier": "fast",
+        "provider": "openai-codex",
+        "id": "gpt-5-mini",
+        "thinking": "low"
+      }
+    ]
+  },
+  "catalog-lock": {
+    "schemaVersion": 1,
+    "lockId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "capabilities": [
+      {
+        "id": "code.search",
+        "mode": "exclusive"
+      },
+      {
+        "id": "code.modify",
+        "mode": "additive"
+      }
+    ],
+    "resources": [
+      {
+        "id": "skill.repo-scout",
+        "kind": "skill",
+        "version": "1.0.0",
+        "source": "catalog:resources/repo-scout.md",
+        "path": "resources/repo-scout.md",
+        "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "provides": [
+          "code.search"
+        ],
+        "requires": [],
+        "conflicts": [],
+        "backends": [
+          "orca-pi",
+          "local-pi"
+        ],
+        "piCompatibility": ">=0.84.0 <0.85.0",
+        "trust": "audited",
+        "startupCost": "low",
+        "runtimeRisk": "none",
+        "permissions": [
+          "observe"
+        ],
+        "credentialEnv": [],
+        "tools": [
+          "read",
+          "grep",
+          "find",
+          "ls"
+        ]
+      }
+    ],
+    "recipes": [
+      {
+        "id": "repo-scout",
+        "capabilities": {
+          "required": [
+            "code.search"
+          ],
+          "optional": []
+        },
+        "resourceIds": [
+          "skill.repo-scout"
+        ],
+        "permissionProfile": "observe",
+        "workspaceMode": "shared-readonly",
+        "modelTier": "fast",
+        "tools": [
+          "read",
+          "grep",
+          "find",
+          "ls"
+        ],
+        "budget": {
+          "timeoutSeconds": 600
+        }
+      }
+    ],
+    "models": [
+      {
+        "tier": "fast",
+        "provider": "openai-codex",
+        "id": "gpt-5-mini",
+        "thinking": "low"
+      }
     ]
   },
   "worker-request": {
     "schemaVersion": 1,
     "task": "Inspect the parser and report evidence.",
-    "acceptanceCriteria": ["Relevant parser entry points are cited."],
-    "capabilities": {"required": ["code.search"], "optional": []},
+    "acceptanceCriteria": [
+      "Relevant parser entry points are cited."
+    ],
+    "capabilities": {
+      "required": [
+        "code.search"
+      ],
+      "optional": []
+    },
     "recipe": "repo-scout",
     "permissionProfile": "observe",
-    "workspace": {"repository": "current", "baseRevision": "0123456789abcdef"},
+    "workspace": {
+      "repository": "current",
+      "baseRevision": "0123456789abcdef"
+    },
     "modelTier": "fast",
-    "budget": {"timeoutMinutes": 10, "maxDelegationDepth": 0},
+    "budget": {
+      "timeoutMinutes": 10,
+      "maxDelegationDepth": 0
+    },
     "dependsOn": [],
     "resourceOverrides": []
   },
@@ -65,21 +195,56 @@
     "catalogLockHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "backend": "orca-pi",
     "task": "Inspect the parser and report evidence.",
-    "acceptanceCriteria": ["Relevant parser entry points are cited."],
-    "model": {"tier": "fast", "provider": "openai-codex", "id": "gpt-5-mini", "thinking": "low"},
+    "acceptanceCriteria": [
+      "Relevant parser entry points are cited."
+    ],
+    "model": {
+      "tier": "fast",
+      "provider": "openai-codex",
+      "id": "gpt-5-mini",
+      "thinking": "low"
+    },
     "permissionProfile": "observe",
-    "workspace": {"mode": "shared-readonly", "repositoryId": "repo-agent-forge", "baseRevision": "0123456789abcdef"},
+    "workspace": {
+      "mode": "shared-readonly",
+      "repositoryId": "repo-agent-forge",
+      "baseRevision": "0123456789abcdef"
+    },
     "resources": {
-      "skills": [{"id": "skill.repo-scout", "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}],
+      "skills": [
+        {
+          "id": "skill.repo-scout",
+          "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
       "extensions": [],
       "promptTemplates": [],
       "systemFragments": [],
-      "contextFiles": [{"path": "AGENTS.md", "sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}],
+      "contextFiles": [
+        {
+          "path": "AGENTS.md",
+          "sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ],
       "mcpServers": []
     },
-    "tools": {"allow": ["read", "grep", "find", "ls"]},
-    "prompt": {"orderedFragmentHashes": ["sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"]},
-    "budget": {"timeoutSeconds": 600, "maxDelegationDepth": 0},
+    "tools": {
+      "allow": [
+        "read",
+        "grep",
+        "find",
+        "ls"
+      ]
+    },
+    "prompt": {
+      "orderedFragmentHashes": [
+        "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      ]
+    },
+    "budget": {
+      "timeoutSeconds": 600,
+      "maxDelegationDepth": 0
+    },
     "returnContract": "worker-result-v1"
   },
   "run-event": {
@@ -98,43 +263,134 @@
     "workerId": "repo-scout",
     "status": "completed",
     "outcome": "Located and inspected the parser.",
-    "claims": [{"id": "claim-parser", "statement": "forge/spec.py is authoritative.", "evidenceIds": ["evidence-parser"]}],
-    "evidence": [{"id": "evidence-parser", "kind": "file", "summary": "Validator source", "artifactId": "artifact-parser"}],
+    "claims": [
+      {
+        "id": "claim-parser",
+        "statement": "forge/spec.py is authoritative.",
+        "evidenceIds": [
+          "evidence-parser"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "id": "evidence-parser",
+        "kind": "file",
+        "summary": "Validator source",
+        "artifactId": "artifact-parser"
+      }
+    ],
     "changes": [],
-    "verification": [{"id": "verify-tests", "status": "passed", "summary": "Validator tests passed.", "artifactIds": ["artifact-tests"]}],
+    "verification": [
+      {
+        "id": "verify-tests",
+        "status": "passed",
+        "summary": "Validator tests passed.",
+        "artifactIds": [
+          "artifact-tests"
+        ]
+      }
+    ],
     "artifacts": [
-      {"id": "artifact-parser", "path": "artifacts/spec.txt", "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
-      {"id": "artifact-tests", "path": "artifacts/tests.txt", "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+      {
+        "id": "artifact-parser",
+        "path": "artifacts/spec.txt",
+        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "id": "artifact-tests",
+        "path": "artifacts/tests.txt",
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
     ],
     "blockers": [],
-    "usage": {"inputTokens": 10, "outputTokens": 20, "wallSeconds": 2}
+    "usage": {
+      "inputTokens": 10,
+      "outputTokens": 20,
+      "wallSeconds": 2
+    }
   },
   "review-packet": {
     "schemaVersion": 1,
     "workerId": "implementation",
     "originalTask": "Implement the parser change.",
-    "acceptanceCriteria": ["Tests pass."],
-    "constraints": ["Do not install packages."],
+    "acceptanceCriteria": [
+      "Tests pass."
+    ],
+    "constraints": [
+      "Do not install packages."
+    ],
     "workerManifestSummary": {
       "manifestId": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
       "permissionProfile": "modify-isolated",
-      "resourceIds": ["skill.implementation"]
+      "resourceIds": [
+        "skill.implementation"
+      ]
     },
     "baseRevision": "0123456789abcdef",
     "headRevision": "fedcba9876543210",
-    "diffArtifact": {"path": "artifacts/change.diff", "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
-    "claims": [{"id": "claim-tests", "statement": "Tests pass.", "evidenceIds": ["verify-tests"]}],
-    "verificationCommands": [{"id": "verify-tests", "argv": ["python3", "-m", "pytest", "-q"]}],
-    "verificationOutputs": [{"commandId": "verify-tests", "status": "passed", "artifactId": "artifact-tests"}],
-    "artifacts": [{"id": "artifact-tests", "path": "artifacts/tests.txt", "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555"}]
+    "diffArtifact": {
+      "path": "artifacts/change.diff",
+      "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "claims": [
+      {
+        "id": "claim-tests",
+        "statement": "Tests pass.",
+        "evidenceIds": [
+          "verify-tests"
+        ]
+      }
+    ],
+    "verificationCommands": [
+      {
+        "id": "verify-tests",
+        "argv": [
+          "python3",
+          "-m",
+          "pytest",
+          "-q"
+        ]
+      }
+    ],
+    "verificationOutputs": [
+      {
+        "commandId": "verify-tests",
+        "status": "passed",
+        "artifactId": "artifact-tests"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "artifact-tests",
+        "path": "artifacts/tests.txt",
+        "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      }
+    ]
   },
   "review-result": {
     "schemaVersion": 1,
     "workerId": "implementation",
     "verdict": "verified",
     "summary": "The change satisfies the delegated criteria.",
-    "claimAssessments": [{"claimId": "claim-tests", "verdict": "verified", "rationale": "The declared test was reproduced.", "evidenceIds": ["review-verify-tests"]}],
-    "verification": [{"id": "review-verify-tests", "status": "passed", "summary": "Tests passed independently.", "artifactIds": []}],
+    "claimAssessments": [
+      {
+        "claimId": "claim-tests",
+        "verdict": "verified",
+        "rationale": "The declared test was reproduced.",
+        "evidenceIds": [
+          "review-verify-tests"
+        ]
+      }
+    ],
+    "verification": [
+      {
+        "id": "review-verify-tests",
+        "status": "passed",
+        "summary": "Tests passed independently.",
+        "artifactIds": []
+      }
+    ],
     "caveats": []
   }
 }

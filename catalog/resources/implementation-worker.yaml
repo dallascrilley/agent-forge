@@ -1,0 +1,19 @@
+schemaVersion: 1
+resource:
+  id: role.implementation-worker
+  kind: role
+  version: 1.0.0
+  source: catalog:roles/implementation-worker.md
+  path: roles/implementation-worker.md
+  sha256: sha256:725be5b2396176e8810f656026fec2367fb5e40fb41fa7eac80f63be4f6da11d
+  provides: [code.modify, code.test]
+  requires: [code.search]
+  conflicts: []
+  backends: [orca-pi, local-pi]
+  piCompatibility: ">=0.84.0 <0.85.0"
+  trust: audited
+  startupCost: medium
+  runtimeRisk: filesystem
+  permissions: [modify-isolated]
+  credentialEnv: []
+  tools: [read, grep, find, ls, bash, edit, write, verify]

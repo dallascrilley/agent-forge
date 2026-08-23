@@ -1,0 +1,12 @@
+schemaVersion: 1
+capabilities:
+  - id: code.modify
+    mode: exclusive
+  - id: code.search
+    mode: exclusive
+  - id: code.test
+    mode: additive
+  - id: git.review
+    mode: exclusive
+  - id: web.research
+    mode: exclusive

@@ -1,0 +1,14 @@
+schemaVersion: 1
+models:
+  - tier: fast
+    provider: openai-codex
+    id: gpt-5-mini
+    thinking: low
+  - tier: balanced
+    provider: openai-codex
+    id: gpt-5
+    thinking: medium
+  - tier: deep
+    provider: openai-codex
+    id: gpt-5
+    thinking: high

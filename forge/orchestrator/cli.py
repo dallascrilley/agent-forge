@@ -111,6 +111,9 @@ def _ledger(cwd: Path) -> RunLedger:
 
 
 def _spawn(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+    value = dict(value)
+    value.setdefault("runId", "run-" + uuid.uuid4().hex)
+    value.setdefault("workerId", "worker-" + uuid.uuid4().hex)
     manifest = _resolve(value, cwd)
     run_id = manifest.to_dict()["runId"]
     worker_id = manifest.to_dict()["workerId"]

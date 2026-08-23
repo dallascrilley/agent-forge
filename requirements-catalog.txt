@@ -1,0 +1,2 @@
+# Optional catalog-authoring dependency; Agent Spec v1 generation remains stdlib-only.
+PyYAML>=6.0.2,<7

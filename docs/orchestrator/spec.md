@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
-- Status: accepted design baseline; implementation not started
-- Version: 0.2-draft
+- Status: accepted design baseline; Phase 1 implementation in progress
+- Version: 0.3-draft
 - Captured: 2026-08-23
 - Tracking: `af-1g5`
 
@@ -9,6 +9,7 @@
 
 - `0.1-draft`: captured the complete accepted brainstorm before further research.
 - `0.2-draft`: incorporated current Pi SDK/RPC and Orca orchestration evidence. Chose companion orchestration schemas, bound the Orca backend to native Run/Task/Dispatch state, added context-file provenance, and recorded gaps in current Pi launch and Agent Forge guardrail/MCP behavior.
+- `0.3-draft`: chose PyYAML as a catalog-compiler-only optional dependency while preserving the stdlib-only Agent Spec v1 generator path.
 
 ## Change discipline
 
@@ -293,6 +294,41 @@ catalog/
 ```
 
 `catalog.lock.json` is generated and committed when the catalog is meant to travel with the repository. Personal catalog overlays may live in dotfiles, but they compile into the same lock format.
+
+### Catalog authoring dependency boundary
+
+**Decision (`af-ezi.1.1`):** catalog compilation uses PyYAML 6 through the optional dependency set in `requirements-catalog.txt`. Agent Spec v1 validation and generation remain stdlib-only and must not import PyYAML, directly or transitively. Reading a compiled JSON lockfile is also stdlib-only. This is an additive command boundary, not an Agent Spec migration.
+
+The explicit catalog-authoring setup and success path are:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-catalog.txt
+.venv/bin/python -m forge.catalog compile catalog --output catalog/catalog.lock.json
+```
+
+The catalog command must import the YAML parser only on its YAML authoring path. If PyYAML is unavailable, it exits nonzero before reading or writing catalog output and reports this stable actionable error (without a traceback):
+
+```text
+catalog compilation requires PyYAML; install it with: python3 -m pip install -r requirements-catalog.txt
+```
+
+Compilation uses `yaml.safe_load`, then applies the authoritative closed catalog validator; YAML constructors cannot create project objects. The compiler must not silently accept JSON as a replacement authoring contract, invoke a system YAML executable, auto-install the dependency, or modify an existing lockfile after dependency or parse failure.
+
+Compatibility and migration behavior:
+
+- Existing `python3 forge/cli.py validate ...` and `generate ...` commands require no installation and retain Python 3.10+ support.
+- Existing Agent Spec v1 JSON files, adapters, generated bundles, and project-wide `python3 -m pytest -q` verification are unchanged.
+- Catalog authors opt in by installing `requirements-catalog.txt`, preferably in a dedicated virtual environment; deployments that only consume a committed lockfile do not install it.
+- PyYAML is constrained to `>=6.0.2,<7`; this line supports the project's Python floor (its package metadata requires Python 3.8+), while the upper bound makes parser-major changes an explicit decision.
+
+Alternatives considered:
+
+- **Make PyYAML a project-wide requirement:** rejected because it breaks the documented zero-install generator and makes lockfile consumers install an authoring dependency.
+- **Require a separately packaged compiler environment:** retained as an operational option (the virtual environment above), but rejected as the only architecture because this repository has no package metadata and a separate distribution would add a second versioning boundary.
+- **Keep JSON as the only zero-install catalog source:** rejected because it revises accepted YAML authoring; JSON remains the generated execution format.
+- **Implement a dependency-free YAML subset or use a stdlib format such as TOML:** rejected because Python 3.10 has no TOML parser, YAML is not in the standard library, and a bespoke parser would add security and compatibility risk.
+- **Shell out to a system YAML tool:** rejected because availability and parser semantics would not be reproducible across fresh checkouts.
 
 ### Resource entry
 

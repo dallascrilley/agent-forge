@@ -44,7 +44,7 @@ Deliverables:
   - `WorkerResult`
   - `ReviewPacket`
   - `ReviewResult`
-- explicit YAML dependency boundary that preserves the existing generator's zero-install path
+- optional PyYAML catalog-compiler dependency in `requirements-catalog.txt`; the existing generator and lockfile readers remain stdlib-only
 - catalog compiler with atomic lockfile output
 - capability resolver and conflict detection
 - permission-profile validator
@@ -277,7 +277,7 @@ The remaining specification work should resolve these in order:
 2. Manifest-specific Pi launch and supervision through Orca.
 3. Exact mechanical shell policy for mutation and review.
 4. Exact typed Orca integration operation.
-5. YAML dependency strategy while preserving Agent Forge's zero-install generator path.
+5. ~~YAML dependency strategy while preserving Agent Forge's zero-install generator path.~~ Resolved in `af-ezi.1.1`: optional compiler-only PyYAML 6 dependency.
 6. Agent Spec v2 migration scope for the existing mutable guardrail and MCP credential gaps.
 
 Each decision should be captured before implementation begins.

@@ -157,6 +157,9 @@ def _select_recipe_resources(
     problems: list[ResolutionProblem] = []
     resources = _resource_map(lock)
     providers = _provider_map(lock)
+    capability_modes = {
+        capability["id"]: capability["mode"] for capability in lock["capabilities"]
+    }
     profile = request["permissionProfile"]
     expected_workspace, allowed_tools = _PROFILE_POLICY[profile]
 
@@ -221,45 +224,60 @@ def _select_recipe_resources(
         selected[resource_id] = resource
         origin[resource_id] = path
 
+    def close_requirements(required: set[str]) -> None:
+        """Resolve selected-resource requirements to a complete provider closure."""
+
+        while True:
+            required.update(
+                capability
+                for resource in selected.values()
+                for capability in resource["requires"]
+            )
+            provided = {
+                capability
+                for resource in selected.values()
+                for capability in resource["provides"]
+            }
+            missing = sorted(required - provided)
+            if not missing:
+                return
+            progress = False
+            for capability in missing:
+                available = providers.get(capability, [])
+                if capability_modes.get(capability) == "exclusive" and len(available) != 1:
+                    problems.append(
+                        ResolutionProblem(
+                            "$.capabilities.required",
+                            "capability-conflict",
+                            f"exclusive capability {capability!r} has {len(available)} providers",
+                        )
+                    )
+                    continue
+                compatible = [
+                    resource
+                    for resource in available
+                    if profile in resource["permissions"] and backend in resource["backends"]
+                ]
+                if not compatible:
+                    problems.append(
+                        ResolutionProblem(
+                            "$.capabilities.required",
+                            "capability-unavailable",
+                            f"no approved {profile}/{backend} provider for {capability!r}",
+                        )
+                    )
+                    continue
+                resource = compatible[0]
+                if resource["id"] not in selected:
+                    selected[resource["id"]] = resource
+                    origin[resource["id"]] = "$.capabilities.required"
+                    progress = True
+            if not progress:
+                return
+
     # Close over required request capabilities and selected-resource requirements.
     required = set(request["capabilities"]["required"])
-    while True:
-        required.update(
-            capability
-            for resource in selected.values()
-            for capability in resource["requires"]
-        )
-        provided = {
-            capability
-            for resource in selected.values()
-            for capability in resource["provides"]
-        }
-        missing = sorted(required - provided)
-        if not missing:
-            break
-        progress = False
-        for capability in missing:
-            compatible = [
-                resource
-                for resource in providers.get(capability, [])
-                if profile in resource["permissions"] and backend in resource["backends"]
-            ]
-            if not compatible:
-                problems.append(
-                    ResolutionProblem(
-                        "$.capabilities.required",
-                        "capability-unavailable",
-                        f"no approved {profile}/{backend} provider for {capability!r}",
-                    )
-                )
-                continue
-            resource = compatible[0]
-            if resource["id"] not in selected:
-                selected[resource["id"]] = resource
-                origin[resource["id"]] = "$.capabilities.required"
-                progress = True
-        if not progress:
-            break
+    close_requirements(required)
 
     # Optional capabilities are selected only when an approved provider exists.
     provided = {
@@ -279,6 +297,9 @@ def _select_recipe_resources(
             resource = compatible[0]
             selected[resource["id"]] = resource
             origin[resource["id"]] = "$.capabilities.optional"
+
+    # Optional providers can introduce their own required capabilities.
+    close_requirements(required)
 
     for resource_id, resource in sorted(selected.items()):
         problems.extend(
@@ -472,24 +493,44 @@ def resolve_request(
         capability["id"]: capability["mode"] for capability in lock["capabilities"]
     }
     capability_problems = []
-    for capability in request_data["capabilities"]["required"]:
-        available = providers.get(capability, [])
-        if not available:
-            capability_problems.append(
-                ResolutionProblem(
-                    "$.capabilities.required",
-                    "capability-unavailable",
-                    f"catalog has no provider for {capability!r}",
+    for field in ("required", "optional"):
+        for capability in request_data["capabilities"][field]:
+            path = f"$.capabilities.{field}"
+            if capability not in capability_modes:
+                if field == "optional":
+                    capability_problems.append(
+                        ResolutionProblem(
+                            path,
+                            "capability-unknown",
+                            f"catalog does not define optional capability {capability!r}",
+                        )
+                    )
+                else:
+                    capability_problems.append(
+                        ResolutionProblem(
+                            path,
+                            "capability-unavailable",
+                            f"catalog has no provider for {capability!r}",
+                        )
+                    )
+                continue
+            available = providers.get(capability, [])
+            if not available and field == "required":
+                capability_problems.append(
+                    ResolutionProblem(
+                        path,
+                        "capability-unavailable",
+                        f"catalog has no provider for {capability!r}",
+                    )
                 )
-            )
-        elif capability_modes.get(capability) == "exclusive" and len(available) != 1:
-            capability_problems.append(
-                ResolutionProblem(
-                    "$.capabilities.required",
-                    "capability-conflict",
-                    f"exclusive capability {capability!r} has {len(available)} providers",
+            elif available and capability_modes[capability] == "exclusive" and len(available) != 1:
+                capability_problems.append(
+                    ResolutionProblem(
+                        path,
+                        "capability-conflict",
+                        f"exclusive capability {capability!r} has {len(available)} providers",
+                    )
                 )
-            )
     if capability_problems:
         raise ResolutionError(capability_problems)
 

@@ -124,6 +124,87 @@ def test_unknown_capability_has_no_silent_implementation_fallback():
     assert any(problem.code == "capability-unavailable" for problem in problems)
 
 
+def test_unknown_optional_capability_is_rejected():
+    request = copy.deepcopy(REQUEST)
+    request["capabilities"]["optional"] = ["unknown.optional"]
+    problems = _rejection(request)
+    assert any(
+        problem.code == "capability-unknown"
+        and problem.path == "$.capabilities.optional"
+        for problem in problems
+    )
+
+
+def test_optional_resource_dependencies_are_closed():
+    lock = copy.deepcopy(LOCK)
+    lock["capabilities"].extend(
+        [
+            {"id": "extra.optional", "mode": "additive"},
+            {"id": "extra.dependency", "mode": "additive"},
+        ]
+    )
+    base = copy.deepcopy(
+        next(resource for resource in lock["resources"] if resource["id"] == "policy.evidence")
+    )
+    optional = copy.deepcopy(base)
+    optional.update(
+        {
+            "id": "resource.optional",
+            "provides": ["extra.optional"],
+            "requires": ["extra.dependency"],
+        }
+    )
+    dependency = copy.deepcopy(base)
+    dependency.update(
+        {
+            "id": "resource.dependency",
+            "provides": ["extra.dependency"],
+            "requires": [],
+        }
+    )
+    lock["resources"].extend([optional, dependency])
+    lock = bind_content_identity("catalog-lock", lock).to_dict()
+    request = copy.deepcopy(REQUEST)
+    request["capabilities"]["optional"] = ["extra.optional"]
+    request["resourceOverrides"] = ["resource.optional"]
+
+    manifest = _resolve(request, lock).to_dict()
+    selected = {
+        item["id"]
+        for field in ("skills", "extensions", "promptTemplates", "systemFragments")
+        for item in manifest["resources"][field]
+    }
+    assert {"resource.optional", "resource.dependency"}.issubset(selected)
+
+
+def test_optional_exclusive_provider_conflict_fails_closed():
+    lock = copy.deepcopy(LOCK)
+    lock["capabilities"].append({"id": "extra.exclusive", "mode": "exclusive"})
+    base = copy.deepcopy(
+        next(resource for resource in lock["resources"] if resource["id"] == "policy.evidence")
+    )
+    for suffix in ("a", "b"):
+        provider = copy.deepcopy(base)
+        provider.update(
+            {
+                "id": f"resource.exclusive-{suffix}",
+                "provides": ["extra.exclusive"],
+                "requires": [],
+            }
+        )
+        lock["resources"].append(provider)
+    lock = bind_content_identity("catalog-lock", lock).to_dict()
+    request = copy.deepcopy(REQUEST)
+    request["capabilities"]["optional"] = ["extra.exclusive"]
+
+    problems = _rejection(request, lock)
+    assert any(
+        problem.code == "capability-conflict"
+        and problem.path == "$.capabilities.optional"
+        for problem in problems
+    )
+
+
 def test_delegation_depth_above_zero_is_a_structured_invalid_request():
     request = copy.deepcopy(REQUEST)
     request["budget"]["maxDelegationDepth"] = 1

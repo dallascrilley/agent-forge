@@ -1,6 +1,6 @@
 # Agent Forge Conductor — roadmap
 
-- Status: accepted phased baseline; Phase 1 through Phase 3 complete, Phase 4 launch canary proven
+- Status: accepted phased baseline; Phase 1 through Phase 3 complete, Phase 4 adapter foundation and launch canary proven
 - Depends on: [working specification](spec.md)
 - Tracking: `af-ezi`
 

@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
-- Status: accepted design baseline; Phase 1 through Phase 3 complete, Phase 4 launch canary proven
-- Version: 1.0-draft
+- Status: accepted design baseline; Phase 1 through Phase 3 complete, Phase 4 adapter foundation and launch canary proven
+- Version: 1.1-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -17,6 +17,7 @@
 - `0.8-draft`: hardened canonical context aliases, optional capability closure, and catalog source credential rejection from Phase 1 review evidence.
 - `0.9-draft`: implemented durable ledger, legal transition reduction, bounded DAG scheduling, restart-safe fake backend, and projection recovery from Phase 2 evidence.
 - `1.0-draft`: selected and observed the manifest-specific Pi launch shape under Orca supervision; rejected RPC injection for this path.
+- `1.1-draft`: implemented the Orca provenance and settlement adapter paths with idempotent receipts and WorkerResult validation.
 
 ## Change discipline
 
@@ -705,6 +706,8 @@ The observed launch canary (Beads `af-ezi.4.1`, Run `run_dbf569fcf2a3`, Task `ta
 5. `worker_done` settles the Dispatch exactly once; `worker-release` preserves an externally owned terminal rather than closing it. The terminal creator owns final cleanup. The canary's Pi terminal exited and `terminal list` showed no residual canary terminal; the current worktree was unchanged.
 
 This is a launch contract, not the full Orca adapter. Production code must persist every returned Run/Task/Dispatch/terminal identity, use the exact retry receipt for unknown creation results, and distinguish externally owned terminals from adapter-owned terminals before cleanup.
+
+The Phase 4 adapter foundation now provides `OrcaClient`/`OrcaBackend` for capability preflight, Run/Task/Dispatch identity mapping, exact terminal attachment, persisted-ID reuse, and unknown-effect receipts. `OrcaObserver` consumes FIFO worker lifecycle Deliveries, validates one structured `WorkerResult` report before acknowledgment, retains source-pinned bounded reads, and exposes idempotent release. The repo-scout and web-research vertical slices remain the next live implementation work.
 
 ### Local Pi backend — post-v1
 

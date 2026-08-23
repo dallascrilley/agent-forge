@@ -1,19 +1,35 @@
 """Durable conductor contracts and deterministic Phase 1 compilation."""
 
 from .contracts import ContractError, validate_contract
+from .fake_backend import (
+    BackendHandle,
+    BackendObservation,
+    FakeBackend,
+    LaunchCoordinator,
+    LaunchDecision,
+    TransientLaunchError,
+    UnknownEffectError,
+)
 from .ledger import LedgerConflictError, LedgerCorruptionError, RunLedger
 from .reducer import RunState, TransitionError, WorkerState, reduce_event, reduce_events
 from .scheduler import NodeSpec, Scheduler, SchedulerError, validate_plan
 from .resolver import ResolutionError, resolve_request
 
 __all__ = [
+    "BackendHandle",
+    "BackendObservation",
     "ContractError",
+    "FakeBackend",
+    "LaunchCoordinator",
+    "LaunchDecision",
     "LedgerConflictError",
     "LedgerCorruptionError",
     "ResolutionError",
     "RunLedger",
     "RunState",
     "TransitionError",
+    "TransientLaunchError",
+    "UnknownEffectError",
     "WorkerState",
     "reduce_event",
     "reduce_events",

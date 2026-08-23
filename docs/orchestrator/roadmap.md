@@ -1,6 +1,6 @@
 # Agent Forge Conductor — roadmap
 
-- Status: accepted phased baseline; implementation not started
+- Status: accepted phased baseline; Phase 1 implementation complete, independent gate pending
 - Depends on: [working specification](spec.md)
 - Tracking: `af-ezi`
 

@@ -25,8 +25,8 @@ The design sources were established in commit `1480626` before implementation be
 
 - Root epic: `af-ezi`
 - Capability phases: 8
-- Total nodes: 54
-- Dependency edges: 92
+- Total nodes: 57
+- Dependency edges: 98
 - Phase review gates: 8
 - Final readiness gate: `af-ezi.9`
 
@@ -45,17 +45,16 @@ Every phase ends in an independent review gate. The final gate depends on all ph
 
 ## Ready frontier
 
-Two leaves are intentionally ready and may proceed in parallel:
+Phase 1 implementation leaves `af-ezi.1.1` through `af-ezi.1.5` and the audit fixes `af-ezi.1.7` through `af-ezi.1.9` are closed. The next non-epic action is the independent review gate:
 
-1. `af-ezi.1.1` — choose the catalog authoring dependency boundary
-2. `af-ezi.1.2` — define companion orchestration contracts
+1. `af-ezi.1.6` — verify deterministic manifest compilation
 
 Inspect before claiming:
 
 ```bash
-bd show af-ezi.1.1 --json
-bd show af-ezi.1.2 --json
-bd update <id> --claim --json
+bd show af-ezi.1.6 --json
+bd ready --json
+bd update af-ezi.1.6 --claim --json
 ```
 
 There is no project `bin/work-items` adapter, so raw `bd --json` owns selection, claim, notes, dependencies, and close operations.
@@ -84,13 +83,17 @@ bd orphans --json
 Observed:
 
 - no dependency cycles
-- all 54 open issues pass tracker conventions
+- the original 54-node graph passed tracker conventions
 - no tracker orphans
-- the non-epic ready frontier is exactly `af-ezi.1.1` and `af-ezi.1.2`
+- after Phase 1 implementation and three discovered-fix beads, the non-epic ready frontier is `af-ezi.1.6`
 - every phase gate depends on all required phase leaves
 - the final gate depends on all eight phase gates
 
-The installed Beads CLI has no native critical-path command. A read-only graph audit computed a 36-node longest path; dependency edges in Beads, not that cached calculation, remain authoritative.
+The installed Beads CLI has no native critical-path command. A read-only graph audit computed a 36-node longest path for the original graph; dependency edges in Beads, not that cached calculation, remain authoritative.
+
+## Current Phase 1 implementation state
+
+The implementation worktree is `dallascrilley/pi-conductor-phase-1`. Commits `b4b6943` through `c74a255` implement the Phase 1 contract, catalog compiler, canonical documents, and resolver. Commits `f7f8284`, `356a563`, and `7ce16ec` close the independently discovered context-alias, optional-capability, and source-credential blockers. The worktree is clean; the phase gate remains open until its review evidence is accepted.
 
 ## Recovery from context loss
 

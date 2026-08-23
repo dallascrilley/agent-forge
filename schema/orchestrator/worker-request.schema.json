@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/orchestrator/worker-request.schema.json",
+  "title": "WorkerRequest",
+  "description": "Agent Forge companion orchestration contract v1; separate from Agent Spec v1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "task",
+    "acceptanceCriteria",
+    "capabilities",
+    "recipe",
+    "permissionProfile",
+    "workspace",
+    "modelTier",
+    "budget",
+    "dependsOn",
+    "resourceOverrides"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "required",
+        "optional"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "uniqueItems": true
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "recipe": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "permissionProfile": {
+      "type": "string",
+      "enum": [
+        "observe",
+        "research",
+        "modify-isolated",
+        "review"
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "required": [
+        "repository",
+        "baseRevision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "const": "current"
+        },
+        "baseRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{7,64}$"
+        }
+      }
+    },
+    "modelTier": {
+      "type": "string",
+      "enum": [
+        "fast",
+        "balanced",
+        "deep"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "timeoutMinutes",
+        "maxDelegationDepth"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "maxDelegationDepth": {
+          "type": "integer",
+          "const": 0
+        }
+      }
+    },
+    "dependsOn": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      },
+      "uniqueItems": true
+    },
+    "resourceOverrides": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.-]*$"
+      },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "observe"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budget": {
+            "properties": {
+              "timeoutMinutes": {
+                "maximum": 20
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budget": {
+            "properties": {
+              "timeoutMinutes": {
+                "maximum": 30
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "modify-isolated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budget": {
+            "properties": {
+              "timeoutMinutes": {
+                "maximum": 60
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "review"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budget": {
+            "properties": {
+              "timeoutMinutes": {
+                "maximum": 15
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

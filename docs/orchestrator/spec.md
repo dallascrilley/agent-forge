@@ -1,15 +1,16 @@
 # Agent Forge Conductor — working specification
 
 - Status: accepted design baseline; Phase 1 implementation in progress
-- Version: 0.3-draft
+- Version: 0.4-draft
 - Captured: 2026-08-23
-- Tracking: `af-1g5`
+- Tracking: `af-ezi`
 
 ## Revision log
 
 - `0.1-draft`: captured the complete accepted brainstorm before further research.
 - `0.2-draft`: incorporated current Pi SDK/RPC and Orca orchestration evidence. Chose companion orchestration schemas, bound the Orca backend to native Run/Task/Dispatch state, added context-file provenance, and recorded gaps in current Pi launch and Agent Forge guardrail/MCP behavior.
 - `0.3-draft`: chose PyYAML as a catalog-compiler-only optional dependency while preserving the stdlib-only Agent Spec v1 generator path.
+- `0.4-draft`: established closed companion orchestration contract v1 schemas and authoritative stdlib validators without revising Agent Spec v1.
 
 ## Change discipline
 
@@ -396,7 +397,9 @@ A recipe declares defaults, not executable paths. The compiler resolves all reso
 
 ## Contracts
 
-The examples below show intended semantics, not final JSON Schema syntax.
+The examples below show intended semantics. The closed contract v1 JSON Schemas under `schema/orchestrator/` define exact fields and enums; `forge/orchestrator/contracts.py` is the stdlib-only validation authority and the test suite checks the shipped schemas against it. Documents use lower-camel-case JSON keys, reject unknown fields at every closed object, collect problems at stable JSON paths, and normalize into deeply immutable named Python contract types. Agent Spec v1 and `schema/agent-spec.schema.json` remain separate and unchanged.
+
+`WorkerRequest` is the only model-authored launch input. Its closed shape intentionally has no command, filesystem-path, MCP-endpoint, credential, or system-prompt fields. Trusted compiler outputs and evidence contracts may contain bounded path or argv records where their schema explicitly permits them.
 
 ### WorkerRequest
 
@@ -419,6 +422,7 @@ workspace:
 modelTier: deep
 budget:
   timeoutMinutes: 30
+  maxDelegationDepth: 0
 dependsOn: [evidence]
 resourceOverrides: []
 ```
@@ -453,7 +457,9 @@ resources:
   extensions: []
   promptTemplates: []
   systemFragments: []
-  contextFiles: []
+  contextFiles:
+    - path: AGENTS.md
+      sha256: "sha256:..."
   mcpServers: []
 tools:
   allow: [read, bash, edit, write, grep, find, ls]
@@ -497,7 +503,9 @@ constraints: []
 workerManifestSummary: {}
 baseRevision: "..."
 headRevision: "..."
-diff: "..."
+diffArtifact:
+  path: artifacts/change.diff
+  sha256: "sha256:..."
 claims: []
 verificationCommands: []
 verificationOutputs: []

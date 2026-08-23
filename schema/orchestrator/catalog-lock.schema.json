@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/orchestrator/catalog-lock.schema.json",
+  "title": "CatalogLock",
+  "description": "Agent Forge companion orchestration contract v1; separate from Agent Spec v1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "lockId",
+    "sourceHash",
+    "capabilities",
+    "resources",
+    "recipes",
+    "models"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "lockId": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "mode"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "additive",
+              "exclusive"
+            ]
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "version",
+          "source",
+          "path",
+          "sha256",
+          "provides",
+          "requires",
+          "conflicts",
+          "backends",
+          "piCompatibility",
+          "trust",
+          "startupCost",
+          "runtimeRisk",
+          "permissions",
+          "credentialEnv",
+          "tools"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "skill",
+              "extension",
+              "prompt-template",
+              "system-fragment",
+              "mcp-server",
+              "role",
+              "recipe"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "provides": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "backends": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "orca-pi",
+                "local-pi"
+              ]
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "piCompatibility": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trust": {
+            "const": "audited"
+          },
+          "startupCost": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "runtimeRisk": {
+            "type": "string",
+            "enum": [
+              "none",
+              "filesystem",
+              "network",
+              "code-execution"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "observe",
+                "research",
+                "modify-isolated",
+                "review"
+              ]
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "credentialEnv": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "uniqueItems": true
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "grep",
+                "find",
+                "ls",
+                "web",
+                "bash",
+                "edit",
+                "write",
+                "verify",
+                "mcp-gateway"
+              ]
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "recipes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "capabilities",
+          "resourceIds",
+          "permissionProfile",
+          "workspaceMode",
+          "modelTier",
+          "tools",
+          "budget"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "capabilities": {
+            "type": "object",
+            "required": [
+              "required",
+              "optional"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "required": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9.-]*$"
+                },
+                "uniqueItems": true
+              },
+              "optional": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9.-]*$"
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          "resourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "permissionProfile": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "research",
+              "modify-isolated",
+              "review"
+            ]
+          },
+          "workspaceMode": {
+            "type": "string",
+            "enum": [
+              "shared-readonly",
+              "isolated-worktree",
+              "isolated-readonly"
+            ]
+          },
+          "modelTier": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "deep"
+            ]
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "grep",
+                "find",
+                "ls",
+                "web",
+                "bash",
+                "edit",
+                "write",
+                "verify",
+                "mcp-gateway"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "budget": {
+            "type": "object",
+            "required": [
+              "timeoutSeconds"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "timeoutSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600
+              }
+            }
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tier",
+          "provider",
+          "id",
+          "thinking"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "deep"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "thinking": {
+            "type": "string",
+            "enum": [
+              "off",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      },
+      "minItems": 1
+    }
+  }
+}

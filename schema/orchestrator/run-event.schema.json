@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/orchestrator/run-event.schema.json",
+  "title": "RunEvent",
+  "description": "Agent Forge companion orchestration contract v1; separate from Agent Spec v1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "runId",
+    "workerId",
+    "sequence",
+    "timestamp",
+    "type",
+    "idempotencyKey",
+    "data"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "workerId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run.requested",
+        "worker.compiled",
+        "worker.policy-approved",
+        "worker.queued",
+        "worker.prepare.requested",
+        "worker.prepared",
+        "worker.launch.requested",
+        "worker.launched",
+        "worker.running",
+        "worker.completed",
+        "worker.partial",
+        "worker.blocked",
+        "worker.failed",
+        "worker.cancelled",
+        "worker.review-pending",
+        "worker.verified",
+        "worker.verified-with-caveats",
+        "worker.refuted",
+        "worker.integrated",
+        "worker.retained-isolated",
+        "worker.rejected",
+        "worker.reconciled"
+      ]
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backendId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cursor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

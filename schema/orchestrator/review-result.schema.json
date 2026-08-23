@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/orchestrator/review-result.schema.json",
+  "title": "ReviewResult",
+  "description": "Agent Forge companion orchestration contract v1; separate from Agent Spec v1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workerId",
+    "verdict",
+    "summary",
+    "claimAssessments",
+    "verification",
+    "caveats"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "workerId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "verified-with-caveats",
+        "refuted"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claimAssessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "claimId",
+          "verdict",
+          "rationale",
+          "evidenceIds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "claimId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "caveated",
+              "refuted"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "summary",
+          "artifactIds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "not-run"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]*$"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "verified-with-caveats"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "caveats": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "verified"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "caveats": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ]
+}

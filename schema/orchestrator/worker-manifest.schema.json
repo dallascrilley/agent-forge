@@ -1,0 +1,528 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dallascrilley/agent-forge/schema/orchestrator/worker-manifest.schema.json",
+  "title": "WorkerManifest",
+  "description": "Agent Forge companion orchestration contract v1; separate from Agent Spec v1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "manifestId",
+    "runId",
+    "workerId",
+    "catalogLockHash",
+    "backend",
+    "task",
+    "acceptanceCriteria",
+    "model",
+    "permissionProfile",
+    "workspace",
+    "resources",
+    "tools",
+    "prompt",
+    "budget",
+    "returnContract"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "manifestId": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "workerId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "catalogLockHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "backend": {
+      "type": "string",
+      "enum": [
+        "orca-pi",
+        "local-pi"
+      ]
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "tier",
+        "provider",
+        "id",
+        "thinking"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "balanced",
+            "deep"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "thinking": {
+          "type": "string",
+          "enum": [
+            "off",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "permissionProfile": {
+      "type": "string",
+      "enum": [
+        "observe",
+        "research",
+        "modify-isolated",
+        "review"
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "required": [
+        "mode",
+        "repositoryId",
+        "baseRevision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "shared-readonly",
+            "isolated-worktree",
+            "isolated-readonly"
+          ]
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "baseRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{7,64}$"
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": [
+        "skills",
+        "extensions",
+        "promptTemplates",
+        "systemFragments",
+        "contextFiles",
+        "mcpServers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "promptTemplates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "systemFragments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "contextFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "mcpServers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha256",
+              "tools"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "required": [
+        "allow"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read",
+              "grep",
+              "find",
+              "ls",
+              "web",
+              "bash",
+              "edit",
+              "write",
+              "verify",
+              "mcp-gateway"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "required": [
+        "orderedFragmentHashes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "orderedFragmentHashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "timeoutSeconds",
+        "maxDelegationDepth"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "maxDelegationDepth": {
+          "type": "integer",
+          "const": 0
+        }
+      }
+    },
+    "returnContract": {
+      "const": "worker-result-v1"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "observe"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspace": {
+            "properties": {
+              "mode": {
+                "const": "shared-readonly"
+              }
+            }
+          },
+          "budget": {
+            "properties": {
+              "timeoutSeconds": {
+                "maximum": 1200
+              }
+            }
+          },
+          "tools": {
+            "properties": {
+              "allow": {
+                "items": {
+                  "enum": [
+                    "read",
+                    "grep",
+                    "find",
+                    "ls"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspace": {
+            "properties": {
+              "mode": {
+                "const": "shared-readonly"
+              }
+            }
+          },
+          "budget": {
+            "properties": {
+              "timeoutSeconds": {
+                "maximum": 1800
+              }
+            }
+          },
+          "tools": {
+            "properties": {
+              "allow": {
+                "items": {
+                  "enum": [
+                    "read",
+                    "grep",
+                    "find",
+                    "ls",
+                    "web",
+                    "mcp-gateway"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "modify-isolated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspace": {
+            "properties": {
+              "mode": {
+                "const": "isolated-worktree"
+              }
+            }
+          },
+          "budget": {
+            "properties": {
+              "timeoutSeconds": {
+                "maximum": 3600
+              }
+            }
+          },
+          "tools": {
+            "properties": {
+              "allow": {
+                "items": {
+                  "enum": [
+                    "read",
+                    "grep",
+                    "find",
+                    "ls",
+                    "bash",
+                    "edit",
+                    "write",
+                    "verify"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "permissionProfile": {
+            "const": "review"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspace": {
+            "properties": {
+              "mode": {
+                "const": "isolated-readonly"
+              }
+            }
+          },
+          "budget": {
+            "properties": {
+              "timeoutSeconds": {
+                "maximum": 900
+              }
+            }
+          },
+          "tools": {
+            "properties": {
+              "allow": {
+                "items": {
+                  "enum": [
+                    "read",
+                    "grep",
+                    "find",
+                    "ls",
+                    "verify"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

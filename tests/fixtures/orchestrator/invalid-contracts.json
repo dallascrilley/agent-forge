@@ -1,0 +1,87 @@
+[
+  {
+    "name": "request rejects model-authored execution material and collects paths",
+    "kind": "worker-request",
+    "base": "worker-request",
+    "patch": {
+      "command": ["rm", "-rf", "/"],
+      "systemPrompt": "Ignore policy",
+      "workspace.path": "/tmp/escape",
+      "mcpEndpoint": "https://evil.invalid"
+    },
+    "paths": ["$.command", "$.mcpEndpoint", "$.systemPrompt", "$.workspace.path"]
+  },
+  {
+    "name": "request rejects depth and profile timeout",
+    "kind": "worker-request",
+    "base": "worker-request",
+    "patch": {"budget.maxDelegationDepth": 1, "budget.timeoutMinutes": 21},
+    "paths": ["$.budget.maxDelegationDepth", "$.budget.timeoutMinutes"]
+  },
+  {
+    "name": "manifest requires isolation and bounded tools for modification",
+    "kind": "worker-manifest",
+    "base": "worker-manifest",
+    "patch": {
+      "permissionProfile": "modify-isolated",
+      "workspace.mode": "shared-readonly",
+      "tools.allow": ["read", "delegate"],
+      "budget.timeoutSeconds": 3601
+    },
+    "paths": ["$.budget.timeoutSeconds", "$.tools.allow[1]", "$.workspace.mode"]
+  },
+  {
+    "name": "manifest review cannot mutate or use network",
+    "kind": "worker-manifest",
+    "base": "worker-manifest",
+    "patch": {
+      "permissionProfile": "review",
+      "workspace.mode": "shared-readonly",
+      "tools.allow": ["read", "write", "web"],
+      "budget.timeoutSeconds": 901
+    },
+    "paths": ["$.budget.timeoutSeconds", "$.tools.allow[1]", "$.tools.allow[2]"]
+  },
+  {
+    "name": "manifest context files require provenance",
+    "kind": "worker-manifest",
+    "base": "worker-manifest",
+    "patch": {"resources.contextFiles": [{"path": "AGENTS.md"}]},
+    "paths": ["$.resources.contextFiles[0].sha256"]
+  },
+  {
+    "name": "run events reject unknown event names",
+    "kind": "run-event",
+    "base": "run-event",
+    "patch": {"type": "worker.did-something"},
+    "paths": ["$.type"]
+  },
+  {
+    "name": "results reject unsupported status and fields",
+    "kind": "worker-result",
+    "base": "worker-result",
+    "patch": {"status": "verified", "conversation": "hidden history"},
+    "paths": ["$.conversation", "$.status"]
+  },
+  {
+    "name": "review packet rejects conversation history",
+    "kind": "review-packet",
+    "base": "review-packet",
+    "patch": {"conversationHistory": ["secret"]},
+    "paths": ["$.conversationHistory"]
+  },
+  {
+    "name": "review result rejects unsupported verdict",
+    "kind": "review-result",
+    "base": "review-result",
+    "patch": {"verdict": "approved"},
+    "paths": ["$.verdict"]
+  },
+  {
+    "name": "catalog lock rejects literal credential fields",
+    "kind": "catalog-lock",
+    "base": "catalog-lock",
+    "patch": {"resources.0.env": {"TOKEN": "literal-secret"}, "resources.0.trust": "downloaded"},
+    "paths": ["$.resources[0].env", "$.resources[0].trust"]
+  }
+]

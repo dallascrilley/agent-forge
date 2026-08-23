@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from .ledger import RunLedger
@@ -13,6 +14,10 @@ from .ledger import RunLedger
 
 class OrcaError(RuntimeError):
     """A typed Orca command or capability failure."""
+
+
+class OrcaSettlementError(OrcaError):
+    """A Delivery or worker report cannot establish a valid settlement."""
 
 
 class OrcaUnknownEffect(OrcaError):
@@ -140,6 +145,122 @@ class OrcaClient:
         return self._invoke(
             ("orchestration", "worker-release", "--dispatch", dispatch_id), mutating=True
         ).result
+
+    def check(
+        self,
+        *,
+        run_id: str,
+        wait: bool = False,
+        acknowledge: str | None = None,
+        types: Sequence[str] = (),
+        timeout_ms: int = 900000,
+    ) -> dict[str, Any]:
+        args = ("orchestration", "check", "--run", run_id)
+        if wait:
+            args += ("--wait", "--timeout-ms", str(timeout_ms))
+        if acknowledge:
+            args += ("--ack", acknowledge)
+        if types:
+            args += ("--types", ",".join(types))
+        return self._invoke(args).result
+
+
+@dataclass(frozen=True)
+class DeliveryObservation:
+    delivery_id: str | None
+    messages: tuple[dict[str, Any], ...]
+    timed_out: bool = False
+
+
+@dataclass(frozen=True)
+class SettledWorker:
+    task_id: str
+    dispatch_id: str
+    outcome: str
+    report_path: str
+    result: Any
+
+
+class OrcaObserver:
+    """Consume settlement deliveries before acknowledging them."""
+
+    def __init__(self, client: OrcaClient, *, report_root: str | Path):
+        self.client = client
+        self.report_root = Path(report_root).resolve()
+        self._processed_deliveries: dict[str, SettledWorker] = {}
+
+    def wait(self, run_id: str, *, timeout_ms: int = 900000) -> DeliveryObservation:
+        result = self.client.check(
+            run_id=run_id,
+            wait=True,
+            types=("worker_done", "escalation", "question"),
+            timeout_ms=timeout_ms,
+        )
+        messages = result.get("messages", [])
+        if not isinstance(messages, list):
+            raise OrcaSettlementError("Orca Delivery messages are not an array")
+        delivery_id = result.get("deliveryId")
+        return DeliveryObservation(
+            delivery_id if isinstance(delivery_id, str) else None,
+            tuple(message for message in messages if isinstance(message, dict)),
+            bool(result.get("timedOut")),
+        )
+
+    def process(self, delivery: DeliveryObservation) -> tuple[SettledWorker, ...]:
+        if delivery.timed_out:
+            return ()
+        if delivery.delivery_id and delivery.delivery_id in self._processed_deliveries:
+            return (self._processed_deliveries[delivery.delivery_id],)
+        done = [message for message in delivery.messages if message.get("type") == "worker_done"]
+        if len(done) != 1:
+            raise OrcaSettlementError("a Delivery must contain exactly one worker_done message")
+        message = done[0]
+        payload = message.get("payload", {})
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError as error:
+                raise OrcaSettlementError("worker_done payload is not JSON") from error
+        if not isinstance(payload, dict):
+            raise OrcaSettlementError("worker_done payload must be an object")
+        task_id = payload.get("taskId") or message.get("task_id")
+        dispatch_id = payload.get("dispatchId") or message.get("dispatch_id")
+        outcome = payload.get("outcome")
+        report_path = payload.get("reportPath") or payload.get("report_path")
+        if not all(isinstance(item, str) and item for item in (task_id, dispatch_id, outcome, report_path)):
+            raise OrcaSettlementError("worker_done must include taskId, dispatchId, outcome, and reportPath")
+        report = self._read_report(report_path)
+        settled = SettledWorker(task_id, dispatch_id, outcome, report_path, report)
+        if delivery.delivery_id:
+            self._processed_deliveries[delivery.delivery_id] = settled
+        return (settled,)
+
+    def acknowledge(self, run_id: str, delivery: DeliveryObservation) -> None:
+        if delivery.delivery_id is None:
+            raise OrcaSettlementError("cannot acknowledge a Delivery without deliveryId")
+        self.client.check(run_id=run_id, acknowledge=delivery.delivery_id)
+
+    def release(self, dispatch_id: str) -> dict[str, Any]:
+        return self.client.worker_release(dispatch_id)
+
+    def _read_report(self, report_path: str) -> Any:
+        candidate = (self.report_root / report_path).resolve()
+        try:
+            candidate.relative_to(self.report_root)
+        except ValueError as error:
+            raise OrcaSettlementError("worker report path escapes the report root") from error
+        if not candidate.is_file():
+            raise OrcaSettlementError(f"worker report does not exist: {report_path}")
+        try:
+            raw = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise OrcaSettlementError(f"worker report is not valid JSON: {report_path}") from error
+        try:
+            from .contracts import validate_contract
+
+            return validate_contract("worker-result", raw).to_dict()
+        except Exception as error:
+            raise OrcaSettlementError(f"worker report failed WorkerResult validation: {error}") from error
 
 
 @dataclass(frozen=True)

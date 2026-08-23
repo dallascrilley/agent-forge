@@ -11,7 +11,14 @@ from .fake_backend import (
     UnknownEffectError,
 )
 from .ledger import LedgerConflictError, LedgerCorruptionError, RunLedger
-from .orca import OrcaBackend, OrcaClient, OrcaError, OrcaUnknownEffect
+from .orca import (
+    OrcaBackend,
+    OrcaClient,
+    OrcaError,
+    OrcaObserver,
+    OrcaSettlementError,
+    OrcaUnknownEffect,
+)
 from .reducer import RunState, TransitionError, WorkerState, reduce_event, reduce_events
 from .scheduler import NodeSpec, Scheduler, SchedulerError, validate_plan
 from .resolver import ResolutionError, resolve_request
@@ -28,6 +35,8 @@ __all__ = [
     "OrcaBackend",
     "OrcaClient",
     "OrcaError",
+    "OrcaObserver",
+    "OrcaSettlementError",
     "OrcaUnknownEffect",
     "ResolutionError",
     "RunLedger",

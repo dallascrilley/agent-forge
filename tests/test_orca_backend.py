@@ -12,10 +12,13 @@ from forge.orchestrator.orca import (
     CommandResult,
     OrcaBackend,
     OrcaClient,
+    OrcaObserver,
+    OrcaSettlementError,
     OrcaUnknownEffect,
 )
 
 REPO = Path(__file__).resolve().parent.parent
+VALID_RESULT = json.loads((REPO / "tests/fixtures/orchestrator/valid-contracts.json").read_text())["worker-result"]
 
 
 def test_orca_backend_persists_one_run_task_dispatch_provenance(tmp_path):
@@ -79,6 +82,103 @@ def test_unknown_mutation_effect_exposes_exact_retry_receipt_without_retry():
         client.run_create("objective")
     assert error.value.retry_request == "retry-42"
     assert len(calls) == 1
+
+
+def test_delivery_replay_report_validation_and_release_are_idempotent(tmp_path):
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps(VALID_RESULT), encoding="utf-8")
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        command = " ".join(argv)
+        if "worker-release" in command:
+            return CommandResult(0, json.dumps({"ok": True, "result": {"state": "released"}}))
+        if "--ack" in command:
+            return CommandResult(0, json.dumps({"ok": True, "result": {"acknowledged": True}}))
+        return CommandResult(
+            0,
+            json.dumps(
+                {
+                    "ok": True,
+                    "result": {
+                        "deliveryId": "delivery-1",
+                        "messages": [
+                            {
+                                "type": "worker_done",
+                                "payload": json.dumps(
+                                    {
+                                        "taskId": "task-1",
+                                        "dispatchId": "dispatch-1",
+                                        "outcome": "succeeded",
+                                        "reportPath": "report.json",
+                                    }
+                                ),
+                            }
+                        ],
+                        "timedOut": False,
+                    },
+                }
+            ),
+        )
+
+    observer = OrcaObserver(OrcaClient(runner=runner), report_root=tmp_path)
+    delivery = observer.wait("run-1", timeout_ms=1)
+    first = observer.process(delivery)
+    second = observer.process(delivery)
+    assert first == second
+    assert first[0].result["status"] == "completed"
+    observer.acknowledge("run-1", delivery)
+    assert observer.release("dispatch-1")["state"] == "released"
+    assert any("--ack delivery-1" in " ".join(call) for call in calls)
+    assert any("worker-release" in " ".join(call) for call in calls)
+
+
+def test_timeout_is_checkpoint_and_bad_report_blocks_acceptance(tmp_path):
+    timeout = OrcaObserver(
+        OrcaClient(
+            runner=lambda argv: CommandResult(
+                0,
+                json.dumps({"ok": True, "result": {"deliveryId": None, "messages": [], "timedOut": True}}),
+            )
+        ),
+        report_root=tmp_path,
+    )
+    assert timeout.process(timeout.wait("run-1", timeout_ms=1)) == ()
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{}", encoding="utf-8")
+    observer = OrcaObserver(
+        OrcaClient(
+            runner=lambda argv: CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "ok": True,
+                        "result": {
+                            "deliveryId": "delivery-bad",
+                            "messages": [
+                                {
+                                    "type": "worker_done",
+                                    "payload": json.dumps(
+                                        {
+                                            "taskId": "task-1",
+                                            "dispatchId": "dispatch-1",
+                                            "outcome": "succeeded",
+                                            "reportPath": "bad.json",
+                                        }
+                                    ),
+                                }
+                            ],
+                        },
+                    }
+                ),
+            )
+        ),
+        report_root=tmp_path,
+    )
+    with pytest.raises(OrcaSettlementError, match="WorkerResult"):
+        observer.process(observer.wait("run-1"))
 
 
 def test_corrupt_persisted_backend_never_creates_a_replacement(tmp_path):

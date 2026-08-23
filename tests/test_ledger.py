@@ -61,6 +61,31 @@ def test_create_run_is_durable_and_idempotent(tmp_path):
         ledger.create_run("run-1", changed)
 
 
+def test_retry_after_crash_rebuilds_missing_request_event_and_index(tmp_path):
+    ledger = RunLedger(tmp_path)
+    ledger.create_run("run-1", REQUEST)
+    (tmp_path / "run-1" / "events.jsonl").unlink()
+    ledger.index_path.unlink()
+
+    ledger.create_run("run-1", REQUEST)
+
+    assert len(ledger.read_events("run-1").events) == 1
+    assert ledger.read_index()["active"][0]["runId"] == "run-1"
+
+
+def test_existing_journal_rebuilds_index_without_demoting_progress(tmp_path):
+    ledger = RunLedger(tmp_path)
+    ledger.create_run("run-1", REQUEST)
+    event = _event("run-1", 1)
+    event["type"] = "worker.compiled"
+    ledger.append_event(event)
+    ledger.index_path.unlink()
+
+    ledger.create_run("run-1", REQUEST)
+
+    assert ledger.read_index()["active"][0]["status"] == "active"
+
+
 def test_contract_documents_backend_and_terminal_projection(tmp_path):
     ledger = RunLedger(tmp_path)
     ledger.create_run("run-1", REQUEST, timestamp="2026-08-23T00:00:00Z")

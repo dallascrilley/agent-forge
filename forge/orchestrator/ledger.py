@@ -369,6 +369,49 @@ class RunLedger:
             existing = self._contract("worker-request", _json_document(request_path, request_path))
             if canonical_bytes(existing.to_dict()) != data:
                 raise LedgerConflictError(f"{request_path} already contains a different request")
+            recovery = self.read_events(run_id)
+            if not recovery.events:
+                self._set_index(run_id, "requested", terminal=False, updated_at=timestamp)
+                self.append_event(
+                    {
+                        "schemaVersion": 1,
+                        "eventId": uuid.uuid4().hex,
+                        "runId": run_id,
+                        "workerId": run_id,
+                        "sequence": 0,
+                        "timestamp": timestamp or _now(),
+                        "type": "run.requested",
+                        "idempotencyKey": f"{run_id}/request/1",
+                        "data": {},
+                    }
+                )
+            else:
+                from .reducer import reduce_events
+
+                projection = reduce_events(recovery.events)
+                disposition_path = run_dir / "disposition.json"
+                if disposition_path.exists():
+                    disposition = self.read_disposition(run_id)
+                    self._set_index(
+                        run_id,
+                        disposition["status"],
+                        terminal=True,
+                        updated_at=disposition["updatedAt"],
+                    )
+                else:
+                    current_entry = None
+                    if self.index_path.exists():
+                        current_index = self.read_index()
+                        current_entry = next(
+                            (item for item in current_index["active"] if item["runId"] == run_id),
+                            None,
+                        )
+                    self._set_index(
+                        run_id,
+                        projection.status,
+                        terminal=False,
+                        updated_at=current_entry["updatedAt"] if current_entry else None,
+                    )
             return existing
         atomic_write(request_path, data)
         self._set_index(run_id, "requested", terminal=False, updated_at=timestamp)

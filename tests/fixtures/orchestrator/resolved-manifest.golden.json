@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "manifestId": "sha256:899c660675d0403e11479ba4530268a6f1ff16623c2bfacebecd55560c8be38d",
+  "runId": "run-golden",
+  "workerId": "repo-scout",
+  "catalogLockHash": "sha256:b857a3cd492f61d3239d48abb95ed9bedadaafa7454ef01564b6d2cf114e2b14",
+  "backend": "orca-pi",
+  "task": "Inspect the parser and report evidence.",
+  "acceptanceCriteria": [
+    "Relevant parser entry points are cited."
+  ],
+  "model": {
+    "id": "gpt-5-mini",
+    "provider": "openai-codex",
+    "thinking": "low",
+    "tier": "fast"
+  },
+  "permissionProfile": "observe",
+  "workspace": {
+    "mode": "shared-readonly",
+    "repositoryId": "repo-fixture",
+    "baseRevision": "0123456789abcdef"
+  },
+  "resources": {
+    "skills": [],
+    "extensions": [],
+    "promptTemplates": [
+      {
+        "id": "policy.evidence",
+        "sha256": "sha256:135bdf201fa8b067fb1f8f349f6402dd56a24b2b8a8c5ac6c14f67e22d449406"
+      }
+    ],
+    "systemFragments": [
+      {
+        "id": "role.repo-scout",
+        "sha256": "sha256:d0652cacbecfb2681d9d5e2df6b279831e1cb448cfde495408e4597a30e20786"
+      },
+      {
+        "id": "system.worker-protocol",
+        "sha256": "sha256:94f29a4d5e01b63c000b5ffdef7dd5a724c4a95bacc0d7794bfd039275004845"
+      }
+    ],
+    "contextFiles": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "sha256:4fd1ed7a78eee6681002c9540def30f754a63f770837bdb6e540b090e0eda448"
+      }
+    ],
+    "mcpServers": []
+  },
+  "tools": {
+    "allow": [
+      "read",
+      "grep",
+      "find",
+      "ls"
+    ]
+  },
+  "prompt": {
+    "orderedFragmentHashes": [
+      "sha256:94f29a4d5e01b63c000b5ffdef7dd5a724c4a95bacc0d7794bfd039275004845",
+      "sha256:d0652cacbecfb2681d9d5e2df6b279831e1cb448cfde495408e4597a30e20786",
+      "sha256:135bdf201fa8b067fb1f8f349f6402dd56a24b2b8a8c5ac6c14f67e22d449406"
+    ]
+  },
+  "budget": {
+    "timeoutSeconds": 600,
+    "maxDelegationDepth": 0
+  },
+  "returnContract": "worker-result-v1"
+}

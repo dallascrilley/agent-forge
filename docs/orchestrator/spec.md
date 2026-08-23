@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
 - Status: accepted design baseline; Phase 1 implementation in progress
-- Version: 0.6-draft
+- Version: 0.7-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -13,6 +13,7 @@
 - `0.4-draft`: established closed companion orchestration contract v1 schemas and authoritative stdlib validators without revising Agent Spec v1.
 - `0.5-draft`: fixed canonical JSON, content-identity exclusions, and atomic-write rules for locked Phase 1 documents.
 - `0.6-draft`: implemented the closed catalog-source layout, safe YAML compiler, approved resource roots, compatibility/hash checks, and representative locked v1 recipes.
+- `0.7-draft`: fixed deterministic recipe/resource selection, structured policy rejection, trusted context-file selection, and exact WorkerManifest compilation.
 
 ## Change discipline
 
@@ -166,6 +167,10 @@ The policy engine then validates:
 - prompt fragments cannot weaken invariant policy.
 
 Resolution or policy failure produces a structured rejection. There is no silent fallback to an unapproved implementation.
+
+Phase 1 resolution (`af-ezi.1.5`) validates the lock identity before selection. An exact `recipe` in `WorkerRequest` is an optional approved override: if named and unavailable or incompatible it is rejected without fallback. Without that override, the resolver considers recipes with the exact permission profile and model tier whose required capabilities are declared by the request, closes each candidate over locked resource dependencies, and deterministically minimizes selected resource count, startup cost, then recipe ID. Required capabilities must have an approved profile/backend provider; optional capabilities are added only when one is available. Exact resource overrides remain subject to the same permission, backend, MCP-gateway/tool-allowlist, conflict, and tool-profile checks.
+
+The request timeout may narrow but not exceed the recipe or fixed-profile maximum. The recipe workspace mode must match the fixed profile. The exact model, resource IDs/hashes, lock ID, tools, prompt-fragment hash order, context-file paths/hashes, timeout, and zero delegation depth are recorded in the manifest. Context file names are trusted compiler input, never request fields; v1 auto-selects only a root `AGENTS.md` when present, rejects explicit missing/duplicate/escaping paths, and hashes selected bytes. Rejections use a stable envelope with `status: rejected` and sorted `{path, code, message}` problems.
 
 ### Scheduler
 
@@ -418,7 +423,7 @@ acceptanceCriteria:
 capabilities:
   required: [code.search, code.modify, code.test]
   optional: []
-recipe: implementation-worker
+recipe: implementation-worker # optional exact approved override
 permissionProfile: modify-isolated
 workspace:
   repository: current

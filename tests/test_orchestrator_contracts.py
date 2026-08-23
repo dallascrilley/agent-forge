@@ -104,6 +104,14 @@ def test_schema_version_is_closed_for_every_contract(kind):
     assert "$.schemaVersion" in [problem.path for problem in exc.value.problems]
 
 
+def test_worker_request_recipe_is_an_optional_approved_override():
+    jsonschema = pytest.importorskip("jsonschema")
+    document = copy.deepcopy(VALID["worker-request"])
+    del document["recipe"]
+    validate_contract("worker-request", document)
+    jsonschema.validate(document, _schema("worker-request"))
+
+
 def test_non_object_collects_one_root_problem():
     with pytest.raises(ContractError) as exc:
         validate_contract("worker-request", [])

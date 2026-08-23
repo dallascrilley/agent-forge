@@ -199,6 +199,7 @@ _CATALOG_LOCK = _object(
                     "permissions": _array(_string(enum=PERMISSION_PROFILES), unique=True, minimum=1),
                     "credentialEnv": _array(_string(pattern=r"^[A-Z][A-Z0-9_]*$"), unique=True),
                     "tools": _array(_string(enum=TOOLS), unique=True),
+                    "mcpTools": _STRING_ARRAY,
                 },
             )
         ),
@@ -237,7 +238,7 @@ _CATALOG_SOURCE["properties"]["resources"]["items"]["properties"]["path"] = _NON
 
 _WORKER_REQUEST = _object(
     (
-        "schemaVersion", "task", "acceptanceCriteria", "capabilities", "recipe",
+        "schemaVersion", "task", "acceptanceCriteria", "capabilities",
         "permissionProfile", "workspace", "modelTier", "budget", "dependsOn",
         "resourceOverrides",
     ),

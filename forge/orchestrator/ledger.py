@@ -488,6 +488,35 @@ class RunLedger:
         path = run_dir / "backend.json"
         return self._write_internal(path, document, _validate_backend)
 
+    def update_backend(
+        self,
+        run_id: str,
+        *,
+        identities: dict[str, str] | None = None,
+        cursors: dict[str, int] | None = None,
+        idempotency_keys: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Merge newly observed Orca identities without replacing prior receipts."""
+
+        backend_path = self._run_dir(run_id) / "backend.json"
+        if backend_path.exists():
+            current = self.read_backend(run_id)
+        else:
+            current = {
+                "schemaVersion": 1,
+                "runId": run_id,
+                "backend": "orca-pi",
+                "identities": {},
+                "cursors": {},
+                "idempotencyKeys": {},
+            }
+        current["identities"].update(identities or {})
+        current["cursors"].update(cursors or {})
+        current["idempotencyKeys"].update(idempotency_keys or {})
+        document = _validate_backend(current)
+        _write_json(backend_path, document)
+        return document
+
     def write_disposition(
         self,
         run_id: str,

@@ -3,6 +3,7 @@
 from .contracts import ContractError, validate_contract
 from .ledger import LedgerConflictError, LedgerCorruptionError, RunLedger
 from .reducer import RunState, TransitionError, WorkerState, reduce_event, reduce_events
+from .scheduler import NodeSpec, Scheduler, SchedulerError, validate_plan
 from .resolver import ResolutionError, resolve_request
 
 __all__ = [
@@ -16,6 +17,10 @@ __all__ = [
     "WorkerState",
     "reduce_event",
     "reduce_events",
+    "NodeSpec",
+    "Scheduler",
+    "SchedulerError",
+    "validate_plan",
     "resolve_request",
     "validate_contract",
 ]

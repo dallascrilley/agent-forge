@@ -12,6 +12,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlsplit
 
 from .orchestrator.canonical import bind_content_identity, canonical_bytes, write_canonical
 from .orchestrator.contracts import ContractError, validate_contract
@@ -23,6 +24,21 @@ MISSING_DEPENDENCY_ERROR = (
 _ZERO_HASH = "sha256:" + "0" * 64
 _COMPATIBILITY_RE = re.compile(
     r"^>=(\d+)\.(\d+)\.(\d+) <(\d+)\.(\d+)\.(\d+)$"
+)
+_CREDENTIAL_ASSIGNMENT_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])"
+    r"(?:api[_-]?key|access[_-]?key|secret|token|password|passwd|credential|auth(?:orization)?)"
+    r"\s*[:=]\s*[^\s,;/]+"
+)
+_CREDENTIAL_KEY_PARTS = (
+    "apikey",
+    "accesskey",
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "credential",
+    "authorization",
 )
 _RESOURCE_ROOTS = {
     "skill": {"skills"},
@@ -219,6 +235,23 @@ def _load_source(root: Path) -> dict[str, Any]:
         raise CatalogCompileError([str(problem) for problem in error.problems]) from error
 
 
+def _source_contains_literal_credential(source: str) -> bool:
+    """Reject credential material in source locators before lock emission."""
+
+    try:
+        parsed = urlsplit(source)
+    except ValueError:
+        parsed = None
+    if parsed is not None:
+        if parsed.username is not None or parsed.password is not None:
+            return True
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+            normalized = re.sub(r"[^a-z]", "", key.lower())
+            if value and any(part in normalized for part in _CREDENTIAL_KEY_PARTS):
+                return True
+    return _CREDENTIAL_ASSIGNMENT_RE.search(source) is not None
+
+
 def _parse_version(version: str) -> tuple[int, int, int] | None:
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
     return tuple(map(int, match.groups())) if match else None
@@ -286,6 +319,11 @@ def _validate_semantics(root: Path, source: dict[str, Any], pi_version: str) -> 
         except OSError as error:
             problems.append(f"{path}.path: cannot read resource: {error}")
             continue
+        if _source_contains_literal_credential(resource["source"]):
+            problems.append(
+                f"{path}.source: literal credential values are forbidden; "
+                "use credentialEnv names instead"
+            )
         actual_hash = "sha256:" + hashlib.sha256(content).hexdigest()
         if actual_hash != resource["sha256"]:
             problems.append(

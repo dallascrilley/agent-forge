@@ -192,6 +192,25 @@ def test_credential_field_accepts_names_not_literal_values(tmp_path):
     assert any("credentialEnv" in problem and "must match" in problem for problem in _problems(catalog))
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "https://user:literal-secret@example.invalid/repo",
+        "https://example.invalid/repo?access_token=literal-secret",
+        "catalog:roles/repo-scout.md?token=literal-secret",
+    ],
+)
+def test_credential_bearing_source_fails_closed_and_preserves_output(tmp_path, source):
+    catalog = _copy_catalog(tmp_path)
+    output = catalog / "catalog.lock.json"
+    output.write_bytes(b"previous-valid-lock")
+    _replace(_resource(catalog), "catalog:roles/repo-scout.md", source)
+
+    problems = _problems(catalog)
+    assert any("source" in problem and "credential" in problem for problem in problems)
+    assert output.read_bytes() == b"previous-valid-lock"
+
+
 def test_incompatible_pi_version_fails_closed(tmp_path):
     catalog = _copy_catalog(tmp_path)
     assert any("incompatible with Pi 0.85.0" in problem for problem in _problems(catalog, pi_version="0.85.0"))

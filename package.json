@@ -1,0 +1,15 @@
+{
+  "name": "agent-forge-conductor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Forge's catalog-driven Pi conductor extension",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}

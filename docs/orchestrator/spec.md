@@ -1,7 +1,7 @@
 # Agent Forge Conductor — working specification
 
 - Status: accepted design baseline; Phase 1 implementation in progress
-- Version: 0.4-draft
+- Version: 0.5-draft
 - Captured: 2026-08-23
 - Tracking: `af-ezi`
 
@@ -11,6 +11,7 @@
 - `0.2-draft`: incorporated current Pi SDK/RPC and Orca orchestration evidence. Chose companion orchestration schemas, bound the Orca backend to native Run/Task/Dispatch state, added context-file provenance, and recorded gaps in current Pi launch and Agent Forge guardrail/MCP behavior.
 - `0.3-draft`: chose PyYAML as a catalog-compiler-only optional dependency while preserving the stdlib-only Agent Spec v1 generator path.
 - `0.4-draft`: established closed companion orchestration contract v1 schemas and authoritative stdlib validators without revising Agent Spec v1.
+- `0.5-draft`: fixed canonical JSON, content-identity exclusions, and atomic-write rules for locked Phase 1 documents.
 
 ## Change discipline
 
@@ -471,7 +472,9 @@ budget:
 returnContract: worker-result-v1
 ```
 
-Manifest identity is content-derived after excluding runtime-assigned fields such as backend handles.
+Manifest identity is content-derived. The canonical JSON contract (`af-ezi.1.3`) is UTF-8 with lexicographically sorted object keys, preserved array order, no insignificant whitespace or trailing newline, and no ASCII escaping. It accepts null, booleans, strings containing valid Unicode scalar values, arrays, objects with string keys, and integers in the interoperable range `[-(2^53-1), 2^53-1]`; floating-point values and larger integers fail closed. Unicode is preserved as authored rather than normalized.
+
+SHA-256 identities use the `sha256:<lowercase-hex>` form. `CatalogLock.lockId` excludes only itself. `WorkerManifest.manifestId` excludes itself plus scheduler-assigned `runId` and `workerId`; backend, task, resources, policy, model, workspace, prompt, and budget remain identity-bearing. Backend handles are not manifest fields and are rejected rather than excluded. Locked documents are written as canonical bytes through a same-directory, flushed and fsynced temporary file followed by atomic replacement; any pre-replace failure retains the previous valid document. These rules replace any earlier unreleased draft output without migration.
 
 ### WorkerResult
 

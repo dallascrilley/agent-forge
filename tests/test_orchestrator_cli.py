@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from forge.orchestrator.cli import _load_input, dispatch
+from forge.orchestrator.ledger import RunLedger
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures" / "orchestrator"
@@ -84,3 +88,24 @@ def test_cancel_targets_a_persisted_queued_worker(tmp_path, monkeypatch):
 def test_unimplemented_integrate_fails_closed():
     with pytest.raises(ValueError, match="unavailable"):
         dispatch({"action": "integrate", "runId": "run-cli", "workerId": "repo-scout"}, REPO)
+
+
+def test_corrupt_ledger_cli_returns_bounded_orphan_error(tmp_path):
+    ledger_root = tmp_path / "delegations"
+    RunLedger(ledger_root)
+    (ledger_root / "index.json").write_text('{"bad": true}', encoding="utf-8")
+    input_path = tmp_path / "input.json"
+    input_path.write_text(json.dumps({"action": "status"}), encoding="utf-8")
+    process = subprocess.run(
+        [sys.executable, "-m", "forge.orchestrator.cli", "--input-file", str(input_path)],
+        cwd=REPO,
+        env={**os.environ, "AGENT_FORGE_DELEGATIONS": str(ledger_root)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert process.returncode == 2
+    assert "Traceback" not in process.stderr
+    payload = json.loads(process.stdout)
+    assert payload["error"]["code"] == "ledger-corrupt"
+    assert payload["error"]["orphaned"] is True

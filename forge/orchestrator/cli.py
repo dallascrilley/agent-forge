@@ -11,7 +11,7 @@ from typing import Any
 
 from .canonical import verify_content_identity
 from .contracts import validate_contract
-from .ledger import RunLedger
+from .ledger import LedgerError, RunLedger
 from .reducer import reduce_events
 from .resolver import ResolutionError, resolve_request
 
@@ -284,6 +284,21 @@ def main(argv: list[str] | None = None) -> int:
         value = _load_input(args.input_file)
         print(json.dumps(dispatch(value, Path.cwd()), sort_keys=True))
         return 0
+    except LedgerError as error:
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error": {
+                        "code": "ledger-corrupt",
+                        "message": str(error)[:300],
+                        "orphaned": True,
+                    },
+                },
+                sort_keys=True,
+            )
+        )
+        return 2
     except (OSError, json.JSONDecodeError, ValueError, KeyError, ResolutionError) as error:
         return _error(str(error))
 

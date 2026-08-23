@@ -63,10 +63,24 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
         {"action": "collect", "runId": "run-cli", "workerId": "repo-scout"}, REPO
     )
     assert collected["state"] == "pending"
+    digest = dispatch({"action": "digest", "maxRuns": 10}, REPO)
+    assert digest["runs"][0]["runId"] == "run-cli"
+    assert digest["runs"][0]["manifests"][0]["timeoutSeconds"] == 600
 
 
-def test_unimplemented_side_effect_actions_fail_closed():
-    with pytest.raises(ValueError, match="unavailable"):
-        dispatch({"action": "cancel", "runId": "run-cli", "reason": "stop"}, REPO)
+def test_cancel_targets_a_persisted_queued_worker(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
+    dispatch(
+        {"action": "spawn", "request": REQUEST, "runId": "run-cancel", "workerId": "repo-scout"},
+        REPO,
+    )
+    cancelled = dispatch(
+        {"action": "cancel", "runId": "run-cancel", "reason": "stop"},
+        REPO,
+    )
+    assert cancelled["disposition"]["status"] == "cancelled"
+
+
+def test_unimplemented_integrate_fails_closed():
     with pytest.raises(ValueError, match="unavailable"):
         dispatch({"action": "integrate", "runId": "run-cli", "workerId": "repo-scout"}, REPO)

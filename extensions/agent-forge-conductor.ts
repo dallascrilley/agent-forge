@@ -8,6 +8,7 @@ import { Type, type Static } from "typebox";
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const ACTIONS = ["catalog", "preview", "spawn", "status", "collect", "cancel", "integrate"] as const;
 type Action = (typeof ACTIONS)[number];
+type CoreAction = Action | "digest";
 
 const DelegateParameters = Type.Object(
   {
@@ -23,7 +24,7 @@ const DelegateParameters = Type.Object(
 type DelegateParams = Static<typeof DelegateParameters>;
 
 type CoreInput = {
-  action: Action;
+  action: CoreAction;
   request?: unknown;
   runId?: string;
   workerId?: string;
@@ -95,10 +96,99 @@ async function callCore(pi: ExtensionAPI, input: CoreInput, cwd: string, signal:
   }
 }
 
+function formatWorkers(result: Record<string, unknown>): string {
+  return bounded(JSON.stringify(result, null, 2));
+}
+
 export default function (pi: ExtensionAPI) {
-  pi.on("session_start", () => {
+  let activeDigest = "";
+  let latestPointers: { runIds: string[]; orphaned: string[] } = { runIds: [], orphaned: [] };
+
+  const refreshDigest = async (cwd: string) => {
+    try {
+      const result = await callCore(pi, { action: "digest", maxRuns: 10 }, cwd, undefined);
+      const runs = Array.isArray(result.runs) ? result.runs : [];
+      const orphaned = Array.isArray(result.orphaned) ? result.orphaned : [];
+      latestPointers = {
+        runIds: runs
+          .map((run) => (run && typeof run === "object" && "runId" in run ? String(run.runId) : ""))
+          .filter(Boolean),
+        orphaned: orphaned
+          .map((run) => (run && typeof run === "object" && "runId" in run ? String(run.runId) : ""))
+          .filter(Boolean),
+      };
+      activeDigest = formatWorkers(result);
+    } catch (error) {
+      latestPointers = { runIds: [], orphaned: ["ledger-unavailable"] };
+      activeDigest = `Agent Forge run ledger unavailable; no run state was fabricated.\n${String(error)}`;
+    }
+  };
+
+  pi.on("session_start", async (_event, ctx) => {
     const allowed = new Set(["read", "grep", "find", "ls", "delegate"]);
     pi.setActiveTools([...new Set([...pi.getActiveTools().filter((name) => allowed.has(name)), "delegate"])]);
+    await refreshDigest(ctx.cwd);
+    pi.appendEntry("agent-forge-run-pointers", latestPointers);
+  });
+
+  pi.on("session_compact", async (_event, ctx) => {
+    await refreshDigest(ctx.cwd);
+  });
+
+  pi.on("before_agent_start", async (_event, ctx) => {
+    if (!activeDigest) await refreshDigest(ctx.cwd);
+    return {
+      message: {
+        customType: "agent-forge-run-digest",
+        content: activeDigest,
+        display: false,
+        details: { bounded: true, runIds: latestPointers.runIds, orphaned: latestPointers.orphaned },
+      },
+    };
+  });
+
+  pi.registerCommand("workers", {
+    description: "Inspect bounded Agent Forge worker status or cancel a queued run",
+    handler: async (args, ctx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (parts[0] === "cancel") {
+        const runId = parts[1];
+        const reason = parts.slice(2).join(" ") || "cancelled by operator";
+        if (!runId) {
+          ctx.ui.notify("Usage: /workers cancel <runId> [reason]", "warning");
+          return;
+        }
+        const result = await callCore(
+          pi,
+          { action: "cancel", runId, reason, repositoryRoot: ctx.cwd, repositoryId: "current", backend: "orca-pi" },
+          ctx.cwd,
+          undefined,
+        );
+        await refreshDigest(ctx.cwd);
+        ctx.ui.notify(formatWorkers(result), "info");
+        return;
+      }
+
+      let runId = parts[0];
+      if (!runId && ctx.mode === "tui") {
+        const index = await callCore(
+          pi,
+          { action: "status", repositoryRoot: ctx.cwd, repositoryId: "current", backend: "orca-pi" },
+          ctx.cwd,
+          undefined,
+        );
+        const data = index.index as { active?: Array<{ runId: string }>; recent?: Array<{ runId: string }> } | undefined;
+        const choices = [...(data?.active ?? []), ...(data?.recent ?? [])].map((item) => item.runId);
+        if (choices.length > 0) runId = await ctx.ui.select("Inspect worker run", choices);
+      }
+      const result = await callCore(
+        pi,
+        { action: "status", runId, repositoryRoot: ctx.cwd, repositoryId: "current", backend: "orca-pi" },
+        ctx.cwd,
+        undefined,
+      );
+      ctx.ui.notify(formatWorkers(result), "info");
+    },
   });
 
   pi.registerTool({

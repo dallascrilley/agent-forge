@@ -17,6 +17,7 @@ from .resolver import ResolutionError, resolve_request
 
 _ALLOWED_FIELDS = {
     "action",
+    "maxRuns",
     "request",
     "runId",
     "workerId",
@@ -25,7 +26,7 @@ _ALLOWED_FIELDS = {
     "backend",
     "reason",
 }
-_ACTIONS = {"catalog", "preview", "spawn", "status", "collect", "cancel", "integrate"}
+_ACTIONS = {"catalog", "preview", "spawn", "status", "collect", "cancel", "integrate", "digest"}
 
 
 def _error(message: str, *, code: int = 2) -> int:
@@ -147,10 +148,10 @@ def _spawn(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
 
 
 def _status(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+    ledger = _ledger(cwd)
     run_id = value.get("runId")
     if not isinstance(run_id, str) or not run_id:
-        raise ValueError("runId is required for status")
-    ledger = _ledger(cwd)
+        return {"status": "ok", "action": "status", "index": ledger.read_index()}
     recovery = ledger.read_events(run_id)
     projection = reduce_events(recovery.events)
     return {
@@ -162,6 +163,78 @@ def _status(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
         "eventCount": len(recovery.events),
         "truncatedTail": recovery.truncated,
     }
+
+
+def _cancel(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+    run_id = value.get("runId")
+    reason = value.get("reason")
+    if not isinstance(run_id, str) or not run_id or not isinstance(reason, str) or not reason:
+        raise ValueError("runId and reason are required for cancel")
+    ledger = _ledger(cwd)
+    events = ledger.read_events(run_id).events
+    projection = reduce_events(events)
+    worker_id = value.get("workerId") or (projection.workers[0].worker_id if len(projection.workers) == 1 else None)
+    if not isinstance(worker_id, str) or worker_id not in projection.worker_map:
+        raise ValueError("cancel requires one persisted workerId")
+    worker = projection.worker(worker_id)
+    if worker.status == "compiled":
+        for event_type, status in (("worker.policy-approved", "policy-approved"), ("worker.queued", "queued")):
+            sequence = ledger.read_events(run_id).events[-1].to_dict()["sequence"] + 1
+            ledger.append_event(
+                {
+                    "schemaVersion": 1,
+                    "eventId": uuid.uuid4().hex,
+                    "runId": run_id,
+                    "workerId": worker_id,
+                    "sequence": sequence,
+                    "timestamp": "2026-08-23T00:00:00Z",
+                    "type": event_type,
+                    "idempotencyKey": f"{run_id}/{worker_id}/{status}/1",
+                    "data": {"status": status},
+                }
+            )
+    elif worker.status not in {"queued", "preparing"}:
+        raise ValueError("cancel is only available before a backend worker is active")
+    disposition = ledger.mark_terminal(run_id, "cancelled", reason, worker_id=worker_id)
+    return {"status": "ok", "action": "cancel", "runId": run_id, "workerId": worker_id, "disposition": disposition}
+
+
+def _digest(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+    maximum = value.get("maxRuns", 10)
+    if not isinstance(maximum, int) or isinstance(maximum, bool) or not 1 <= maximum <= 20:
+        raise ValueError("maxRuns must be between 1 and 20")
+    ledger = _ledger(cwd)
+    index = ledger.read_index()
+    entries = (index["active"] + index["recent"])[:maximum]
+    runs = []
+    orphaned = []
+    for entry in entries:
+        run_id = entry["runId"]
+        try:
+            recovery = ledger.read_events(run_id)
+            projection = reduce_events(recovery.events)
+            manifests = []
+            for path in sorted((ledger.root / run_id / "manifests").glob("*.json")):
+                worker_id = path.stem
+                manifest = ledger.read_manifest(run_id, worker_id).to_dict()
+                manifests.append({"workerId": worker_id, "timeoutSeconds": manifest["budget"]["timeoutSeconds"]})
+            backend = ledger.read_backend(run_id) if (ledger.root / run_id / "backend.json").exists() else None
+            disposition = ledger.read_disposition(run_id) if (ledger.root / run_id / "disposition.json").exists() else None
+            runs.append(
+                {
+                    "runId": run_id,
+                    "status": entry["status"],
+                    "updatedAt": entry["updatedAt"],
+                    "projection": projection.to_dict(),
+                    "manifests": manifests,
+                    "backendIdentities": backend["identities"] if backend else {},
+                    "disposition": disposition,
+                    "truncatedTail": recovery.truncated,
+                }
+            )
+        except Exception as error:
+            orphaned.append({"runId": run_id, "reason": str(error)[:300]})
+    return {"status": "ok", "action": "digest", "runs": runs, "orphaned": orphaned, "maxRuns": maximum}
 
 
 def _collect(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
@@ -192,9 +265,13 @@ def dispatch(value: dict[str, Any], cwd: str | Path) -> dict[str, Any]:
         return _spawn(value, root)
     if action == "status":
         return _status(value, root)
+    if action == "digest":
+        return _digest(value, root)
     if action == "collect":
         return _collect(value, root)
-    if action in {"cancel", "integrate"}:
+    if action == "cancel":
+        return _cancel(value, root)
+    if action == "integrate":
         raise ValueError(f"{action} is unavailable until the backend phase is implemented")
     raise ValueError(f"unsupported action {action!r}")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -172,6 +173,25 @@ def test_context_selection_hashes_only_trusted_relative_files(tmp_path):
     outside.write_text("escape", encoding="utf-8")
     problems = _rejection(repository_root=root, context_files=("../outside.md",))
     assert any(problem.code == "context-escape" for problem in problems)
+
+
+def test_context_aliases_are_rejected_and_manifest_paths_are_canonical(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "AGENTS.md").write_text("instructions", encoding="utf-8")
+    (root / "alias.md").symlink_to(root / "AGENTS.md")
+
+    for aliases in (("AGENTS.md", "./AGENTS.md"), ("AGENTS.md", "alias.md")):
+        problems = _rejection(repository_root=root, context_files=aliases)
+        assert any(problem.code == "context-duplicate" for problem in problems)
+
+    manifest = _resolve(repository_root=root, context_files=("alias.md",)).to_dict()
+    assert manifest["resources"]["contextFiles"] == [
+        {
+            "path": "AGENTS.md",
+            "sha256": "sha256:" + hashlib.sha256(b"instructions").hexdigest(),
+        }
+    ]
 
 
 def test_tampered_lockfile_is_rejected_before_resolution():

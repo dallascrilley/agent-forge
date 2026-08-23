@@ -340,15 +340,9 @@ def _context_bindings(
         names = tuple(context_files)
     bindings = []
     problems = []
-    seen: set[str] = set()
+    seen: set[Path] = set()
     for index, name in enumerate(names):
         path = f"$.contextFiles[{index}]"
-        if name in seen:
-            problems.append(
-                ResolutionProblem(path, "context-duplicate", f"duplicate context file {name!r}")
-            )
-            continue
-        seen.add(name)
         authored = Path(name)
         if authored.is_absolute() or ".." in authored.parts:
             problems.append(
@@ -357,7 +351,7 @@ def _context_bindings(
             continue
         try:
             resolved = (root / authored).resolve()
-            resolved.relative_to(root)
+            relative = resolved.relative_to(root)
         except (OSError, RuntimeError, ValueError):
             problems.append(
                 ResolutionProblem(path, "context-escape", "context path must remain within repository root")
@@ -368,6 +362,16 @@ def _context_bindings(
                 ResolutionProblem(path, "context-missing", f"context file {name!r} does not exist")
             )
             continue
+        if relative in seen:
+            problems.append(
+                ResolutionProblem(
+                    path,
+                    "context-duplicate",
+                    f"duplicate context file {relative.as_posix()!r}",
+                )
+            )
+            continue
+        seen.add(relative)
         try:
             content = resolved.read_bytes()
         except OSError as error:
@@ -377,7 +381,7 @@ def _context_bindings(
             continue
         bindings.append(
             {
-                "path": authored.as_posix(),
+                "path": relative.as_posix(),
                 "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
             }
         )

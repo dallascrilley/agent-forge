@@ -13,6 +13,7 @@ from .canonical import verify_content_identity
 from .contracts import validate_contract
 from .ledger import LedgerError, RunLedger, utc_now
 from .orca import OrcaClient, OrcaError, OrcaObserver
+from .recovery import OrcaRecovery
 from .reducer import reduce_events
 from .resolver import ResolutionError, resolve_request
 from .verticals import (
@@ -197,7 +198,12 @@ def _status(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
     }
 
 
-def _cancel(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+def _cancel(
+    value: dict[str, Any],
+    cwd: Path,
+    *,
+    orca_client: OrcaClient | None = None,
+) -> dict[str, Any]:
     run_id = value.get("runId")
     reason = value.get("reason")
     if not isinstance(run_id, str) or not run_id or not isinstance(reason, str) or not reason:
@@ -209,6 +215,23 @@ def _cancel(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
     if not isinstance(worker_id, str) or worker_id not in projection.worker_map:
         raise ValueError("cancel requires one persisted workerId")
     worker = projection.worker(worker_id)
+    cancellation_path = ledger.root / run_id / "cancellation.json"
+    if cancellation_path.exists():
+        execution = OrcaRecovery(orca_client or OrcaClient(), ledger).cancel(run_id, worker_id, reason)
+        return {
+            "status": "ok",
+            "action": "cancel",
+            "runId": run_id,
+            "workerId": worker_id,
+            "disposition": ledger.read_disposition(run_id),
+            "cancellation": ledger.read_cancellation(run_id),
+            "recovery": {
+                "action": execution.decision.action,
+                "dispatchId": execution.dispatch_id,
+                "backendState": execution.observation.state,
+                "remoteMutation": False,
+            },
+        }
     if worker.status == "compiled":
         for event_type, status in (("worker.policy-approved", "policy-approved"), ("worker.queued", "queued")):
             sequence = ledger.read_events(run_id).events[-1].to_dict()["sequence"] + 1
@@ -225,10 +248,42 @@ def _cancel(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
                     "data": {"status": status},
                 }
             )
-    elif worker.status not in {"queued", "preparing"}:
-        raise ValueError("cancel is only available before a backend worker is active")
-    disposition = ledger.mark_terminal(run_id, "cancelled", reason, worker_id=worker_id)
-    return {"status": "ok", "action": "cancel", "runId": run_id, "workerId": worker_id, "disposition": disposition}
+        worker = reduce_events(ledger.read_events(run_id).events).worker(worker_id)
+    if worker.status in {"queued", "preparing"}:
+        backend_path = ledger.root / run_id / "backend.json"
+        dispatch_id = (
+            ledger.read_backend(run_id)["identities"].get(f"dispatch:{worker_id}")
+            if backend_path.exists()
+            else None
+        )
+        if not dispatch_id:
+            disposition = ledger.mark_terminal(run_id, "cancelled", reason, worker_id=worker_id)
+            return {
+                "status": "ok",
+                "action": "cancel",
+                "runId": run_id,
+                "workerId": worker_id,
+                "disposition": disposition,
+                "recovery": {"action": "record_cancelled", "remoteMutation": False},
+            }
+    elif worker.status not in {"launched", "running"}:
+        raise ValueError("cancel requires a queued worker or an active persisted Dispatch")
+
+    execution = OrcaRecovery(orca_client or OrcaClient(), ledger).cancel(run_id, worker_id, reason)
+    return {
+        "status": "ok",
+        "action": "cancel",
+        "runId": run_id,
+        "workerId": worker_id,
+        "disposition": ledger.read_disposition(run_id),
+        "cancellation": ledger.read_cancellation(run_id),
+        "recovery": {
+            "action": execution.decision.action,
+            "dispatchId": execution.dispatch_id,
+            "backendState": execution.observation.state,
+            "remoteMutation": execution.decision.action == "stop",
+        },
+    }
 
 
 def _digest(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
@@ -347,7 +402,7 @@ def dispatch(
     if action == "collect":
         return _collect(value, root, orca_client=orca_client)
     if action == "cancel":
-        return _cancel(value, root)
+        return _cancel(value, root, orca_client=orca_client)
     if action == "integrate":
         raise ValueError(f"{action} is unavailable until the backend phase is implemented")
     raise ValueError(f"unsupported action {action!r}")

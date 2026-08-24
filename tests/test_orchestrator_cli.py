@@ -147,6 +147,70 @@ def test_spawn_and_collect_route_web_researcher_without_widening(tmp_path, monke
     assert collected["state"] == "pending"
 
 
+def test_active_cancel_uses_exact_recovery_path_and_replays_without_a_second_stop(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        command = " ".join(argv)
+        if command.startswith("orca status"):
+            result = {"runtime": {"capabilities": ["orchestration.contract.v1"]}}
+        elif "run-create" in command:
+            result = {"run": {"id": "native-run"}}
+        elif "task-create" in command:
+            result = {"task": {"id": "native-task"}}
+        elif "terminal create" in command:
+            result = {"terminal": {"handle": "native-terminal"}}
+        elif "terminal wait" in command:
+            result = {"timedOut": False}
+        elif "worker-start" in command:
+            result = {"dispatchId": "native-dispatch"}
+        elif "worker-show" in command:
+            result = {"worker": {"state": "ready"}}
+        elif "worker-read" in command:
+            result = {"source": "terminal", "cursor": 3, "lines": ["partial"]}
+        elif "worker-stop" in command:
+            result = {"state": "stopped", "dispatchId": "native-dispatch"}
+        else:
+            raise AssertionError(command)
+        return CommandResult(0, json.dumps({"ok": True, "result": result}))
+
+    client = OrcaClient(runner=runner)
+    dispatch(
+        {"action": "spawn", "request": copy.deepcopy(REQUEST), "runId": "run-cli-cancel", "workerId": "repo-scout"},
+        REPO,
+        orca_client=client,
+    )
+    cancelled = dispatch(
+        {"action": "cancel", "runId": "run-cli-cancel", "workerId": "repo-scout", "reason": "operator requested stop"},
+        REPO,
+        orca_client=client,
+    )
+    assert cancelled["disposition"]["status"] == "cancelled"
+    assert cancelled["cancellation"]["status"] == "stopped"
+    assert cancelled["recovery"] == {
+        "action": "stop",
+        "dispatchId": "native-dispatch",
+        "backendState": "ready",
+        "remoteMutation": True,
+    }
+    assert [next(part for part in call if part in {"worker-show", "worker-read", "worker-stop"}) for call in calls[-3:]] == [
+        "worker-show",
+        "worker-read",
+        "worker-stop",
+    ]
+
+    before = len(calls)
+    replay = dispatch(
+        {"action": "cancel", "runId": "run-cli-cancel", "workerId": "repo-scout", "reason": "operator requested stop"},
+        REPO,
+        orca_client=client,
+    )
+    assert replay["recovery"]["action"] == "record_cancelled"
+    assert len(calls) == before
+
+
 def test_cancel_targets_a_persisted_queued_worker(tmp_path, monkeypatch):
     root = tmp_path / "delegations"
     monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(root))

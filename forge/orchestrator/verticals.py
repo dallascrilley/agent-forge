@@ -36,6 +36,12 @@ class RepoScoutPlan:
 
 
 @dataclass(frozen=True)
+class WebResearchPlan:
+    manifest: WorkerManifest
+    workspace_before: WorkspaceSnapshot
+
+
+@dataclass(frozen=True)
 class PiLaunchCommand:
     argv: tuple[str, ...]
 
@@ -190,7 +196,7 @@ def _status_digest(status: str) -> str:
 
 
 def launch_repo_scout(
-    plan: RepoScoutPlan,
+    plan: RepoScoutPlan | WebResearchPlan,
     catalog_lock: dict[str, Any],
     *,
     catalog_root: str | Path,
@@ -297,6 +303,8 @@ def collect_repo_scout(
     ledger: RunLedger,
     observer: OrcaObserver,
     timeout_ms: int = 900000,
+    _result_validator: Any = None,
+    _vertical: str = "repo-scout",
 ) -> WorkerResult | None:
     """Collect, validate, durably settle, and clean up one launched repo scout."""
 
@@ -311,20 +319,21 @@ def collect_repo_scout(
         "status": identities.get(f"workspace-status:{worker_id}"),
     }
     if any(not isinstance(value, str) or not value for value in required.values()):
-        raise VerticalSliceError("repo-scout backend identities are incomplete")
+        raise VerticalSliceError(f"{_vertical} backend identities are incomplete")
     delivery = observer.wait(required["run"], timeout_ms=timeout_ms)
     if delivery.timed_out:
         return None
     if not delivery.delivery_id:
-        raise VerticalSliceError("repo-scout settlement has no durable Delivery ID")
+        raise VerticalSliceError(f"{_vertical} settlement has no durable Delivery ID")
     settled = observer.process(delivery)
     if len(settled) != 1:
-        raise VerticalSliceError("repo-scout settlement must contain exactly one worker")
+        raise VerticalSliceError(f"{_vertical} settlement must contain exactly one worker")
     worker = settled[0]
     if worker.task_id != required["task"] or worker.dispatch_id != required["dispatch"]:
-        raise VerticalSliceError("repo-scout settlement provenance does not match persisted identities")
+        raise VerticalSliceError(f"{_vertical} settlement provenance does not match persisted identities")
     current = snapshot_workspace(repository_root)
-    validated = validate_repo_scout_result(
+    validator = _result_validator or validate_repo_scout_result
+    validated = validator(
         worker.result,
         worker_id=worker_id,
         workspace_before=WorkspaceSnapshot(required["revision"], required["status"]),
@@ -412,6 +421,92 @@ def compile_repo_scout(
     return RepoScoutPlan(manifest, workspace_before)
 
 
+def compile_web_researcher(
+    request: dict[str, Any],
+    catalog_lock: dict[str, Any],
+    *,
+    run_id: str,
+    worker_id: str,
+    repository_id: str,
+    repository_root: str | Path,
+    backend: str = "orca-pi",
+) -> WebResearchPlan:
+    """Compile the exact audited web-researcher recipe without network access."""
+
+    if request.get("recipe") != "web-researcher":
+        raise VerticalSliceError("web-research vertical requires the exact web-researcher recipe")
+    if request.get("permissionProfile") != "research":
+        raise VerticalSliceError("web-research vertical requires the research permission profile")
+    manifest = resolve_request(
+        request,
+        catalog_lock,
+        run_id=run_id,
+        worker_id=worker_id,
+        repository_id=repository_id,
+        repository_root=repository_root,
+        backend=backend,
+    )
+    value = manifest.to_dict()
+    if value["permissionProfile"] != "research":
+        raise VerticalSliceError("resolver widened web-researcher permission profile")
+    if value["tools"]["allow"] != ["read", "web"]:
+        raise VerticalSliceError("web-researcher resolved tools must be exactly read and web")
+    workspace_before = snapshot_workspace(repository_root)
+    if value["workspace"]["baseRevision"] != workspace_before.revision:
+        raise VerticalSliceError("web-researcher request baseRevision does not match repository HEAD")
+    return WebResearchPlan(manifest, workspace_before)
+
+
+def launch_web_researcher(
+    plan: WebResearchPlan,
+    catalog_lock: dict[str, Any],
+    *,
+    catalog_root: str | Path,
+    repository_root: str | Path,
+    ledger: RunLedger,
+    client: OrcaClient,
+) -> RepoScoutLaunchReceipt:
+    """Launch a compiled researcher through the same read-only Orca lifecycle."""
+
+    manifest = plan.manifest.to_dict()
+    if manifest["permissionProfile"] != "research" or manifest["tools"]["allow"] != ["read", "web"]:
+        raise VerticalSliceError("web-researcher launch requires the exact read/web research manifest")
+    return launch_repo_scout(
+        plan,
+        catalog_lock,
+        catalog_root=catalog_root,
+        repository_root=repository_root,
+        ledger=ledger,
+        client=client,
+    )
+
+
+def collect_web_researcher(
+    run_id: str,
+    worker_id: str,
+    *,
+    repository_root: str | Path,
+    ledger: RunLedger,
+    observer: OrcaObserver,
+    timeout_ms: int = 900000,
+) -> WorkerResult | None:
+    """Collect a web researcher without widening its workspace permissions."""
+
+    manifest = ledger.read_manifest(run_id, worker_id).to_dict()
+    if manifest["permissionProfile"] != "research" or manifest["tools"]["allow"] != ["read", "web"]:
+        raise VerticalSliceError("web-researcher collection requires the exact read/web research manifest")
+    return collect_repo_scout(
+        run_id,
+        worker_id,
+        repository_root=repository_root,
+        ledger=ledger,
+        observer=observer,
+        timeout_ms=timeout_ms,
+        _result_validator=validate_web_research_result,
+        _vertical="web-researcher",
+    )
+
+
 def validate_repo_scout_result(
     result: dict[str, Any] | WorkerResult,
     *,
@@ -437,6 +532,67 @@ def validate_repo_scout_result(
         raise VerticalSliceError("repo-scout observe result must not report changes")
     assert_workspace_unchanged(workspace_before, workspace_after)
     return validated  # type: ignore[return-value]
+
+
+def validate_web_research_result(
+    result: dict[str, Any] | WorkerResult,
+    *,
+    worker_id: str,
+    workspace_before: WorkspaceSnapshot,
+    workspace_after: WorkspaceSnapshot,
+) -> WorkerResult:
+    """Validate bounded URL evidence or an explicit blocked network outcome."""
+
+    try:
+        validated = validate_contract(
+            "worker-result",
+            result.to_dict() if isinstance(result, WorkerResult) else result,
+        )
+    except ContractError as error:
+        raise VerticalSliceError(str(error)) from error
+    value = validated.to_dict()
+    if value["workerId"] != worker_id:
+        raise VerticalSliceError("web-researcher result workerId does not match the plan")
+    if value["status"] not in {"completed", "partial", "blocked"}:
+        raise VerticalSliceError(
+            f"web-researcher result is not an acceptable research outcome: {value['status']}"
+        )
+    if value["changes"]:
+        raise VerticalSliceError("web-researcher result must not report changes")
+    if value["status"] == "blocked":
+        if not value["blockers"]:
+            raise VerticalSliceError("blocked web-researcher result must record a network blocker")
+    else:
+        urls = [item for item in value["evidence"] if item["kind"] == "url"]
+        if not urls:
+            raise VerticalSliceError("web-researcher result must cite URL evidence")
+        if any("http://" not in item["summary"] and "https://" not in item["summary"] for item in urls):
+            raise VerticalSliceError("web-researcher URL evidence must identify its source URL")
+        if any(len(item["summary"]) > 2048 for item in urls):
+            raise VerticalSliceError("web-researcher evidence exceeds the bounded content limit")
+    assert_workspace_unchanged(workspace_before, workspace_after)
+    return validated  # type: ignore[return-value]
+
+
+def fake_web_research_result(worker_id: str, source_url: str) -> WorkerResult:
+    """Create deterministic URL evidence for offline contract tests only."""
+
+    if not source_url.startswith(("https://", "http://")):
+        raise VerticalSliceError("fake web-research evidence requires an absolute HTTP(S) URL")
+    value = {
+        "schemaVersion": 1,
+        "workerId": worker_id,
+        "status": "completed",
+        "outcome": "Collected bounded read-only source evidence.",
+        "claims": [{"id": "source-inspected", "statement": "The approved source was inspected.", "evidenceIds": ["source-evidence"]}],
+        "evidence": [{"id": "source-evidence", "kind": "url", "summary": f"Source URL: {source_url}; bounded content retained in the report.", "artifactId": "source-artifact"}],
+        "changes": [],
+        "verification": [],
+        "artifacts": [],
+        "blockers": [],
+        "usage": {},
+    }
+    return validate_contract("worker-result", value)  # type: ignore[return-value]
 
 
 def fake_repo_scout_result(worker_id: str, inspected_path: str) -> WorkerResult:

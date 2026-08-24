@@ -25,6 +25,16 @@ REQUEST["workspace"]["baseRevision"] = subprocess.check_output(
 ).strip()
 
 
+def _research_request():
+    request = copy.deepcopy(REQUEST)
+    request["task"] = "Research one approved public source and return bounded URL evidence."
+    request["capabilities"] = {"required": ["web.research"], "optional": []}
+    request["recipe"] = "web-researcher"
+    request["permissionProfile"] = "research"
+    request["modelTier"] = "balanced"
+    return request
+
+
 def _launch_client():
     def runner(argv):
         command = " ".join(argv)
@@ -111,6 +121,30 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
     digest = dispatch({"action": "digest", "maxRuns": 10}, REPO)
     assert digest["runs"][0]["runId"] == "run-cli"
     assert digest["runs"][0]["manifests"][0]["timeoutSeconds"] == 600
+
+
+def test_spawn_and_collect_route_web_researcher_without_widening(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
+    spawned = dispatch(
+        {
+            "action": "spawn",
+            "request": _research_request(),
+            "runId": "run-cli-research",
+            "workerId": "web-researcher",
+        },
+        REPO,
+        orca_client=_launch_client(),
+    )
+    assert spawned["state"] == "running"
+    assert spawned["manifest"]["permissionProfile"] == "research"
+    assert spawned["manifest"]["tools"] == ["read", "web"]
+
+    collected = dispatch(
+        {"action": "collect", "runId": "run-cli-research", "workerId": "web-researcher"},
+        REPO,
+        orca_client=_launch_client(),
+    )
+    assert collected["state"] == "pending"
 
 
 def test_cancel_targets_a_persisted_queued_worker(tmp_path, monkeypatch):

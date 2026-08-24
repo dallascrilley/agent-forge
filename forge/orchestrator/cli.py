@@ -18,8 +18,11 @@ from .resolver import ResolutionError, resolve_request
 from .verticals import (
     VerticalSliceError,
     collect_repo_scout,
+    collect_web_researcher,
     compile_repo_scout,
+    compile_web_researcher,
     launch_repo_scout,
+    launch_web_researcher,
 )
 
 _ALLOWED_FIELDS = {
@@ -128,8 +131,16 @@ def _spawn(
     value.setdefault("runId", "run-" + uuid.uuid4().hex)
     value.setdefault("workerId", "worker-" + uuid.uuid4().hex)
     lock = json.loads((cwd / "catalog" / "catalog.lock.json").read_text(encoding="utf-8"))
-    plan = compile_repo_scout(
-        _request(value),
+    request = _request(value)
+    planning = {
+        "repo-scout": (compile_repo_scout, launch_repo_scout),
+        "web-researcher": (compile_web_researcher, launch_web_researcher),
+    }.get(request.get("recipe"))
+    if planning is None:
+        raise ValueError("spawn supports only the repo-scout and web-researcher read-only recipes")
+    compile_plan, launch_plan = planning
+    plan = compile_plan(
+        request,
         lock,
         run_id=value["runId"],
         worker_id=value["workerId"],
@@ -141,9 +152,9 @@ def _spawn(
     run_id = manifest.to_dict()["runId"]
     worker_id = manifest.to_dict()["workerId"]
     ledger = _ledger(cwd)
-    ledger.create_run(run_id, _request(value))
+    ledger.create_run(run_id, request)
     ledger.write_manifest(run_id, worker_id, manifest)
-    launched = launch_repo_scout(
+    launched = launch_plan(
         plan,
         lock,
         catalog_root=cwd / "catalog",
@@ -273,7 +284,14 @@ def _collect(
     if backend_path.exists():
         backend = ledger.read_backend(run_id)
         if backend["identities"].get(f"dispatch:{worker_id}"):
-            result = collect_repo_scout(
+            recipe = ledger.read_request(run_id).to_dict().get("recipe")
+            collector = {
+                "repo-scout": collect_repo_scout,
+                "web-researcher": collect_web_researcher,
+            }.get(recipe)
+            if collector is None:
+                raise ValueError("collect supports only the repo-scout and web-researcher read-only recipes")
+            result = collector(
                 run_id,
                 worker_id,
                 repository_root=value.get("repositoryRoot", str(cwd)),

@@ -12,8 +12,15 @@ from typing import Any
 from .canonical import verify_content_identity
 from .contracts import validate_contract
 from .ledger import LedgerError, RunLedger, utc_now
+from .orca import OrcaClient, OrcaError, OrcaObserver
 from .reducer import reduce_events
 from .resolver import ResolutionError, resolve_request
+from .verticals import (
+    VerticalSliceError,
+    collect_repo_scout,
+    compile_repo_scout,
+    launch_repo_scout,
+)
 
 _ALLOWED_FIELDS = {
     "action",
@@ -111,30 +118,38 @@ def _ledger(cwd: Path) -> RunLedger:
     return RunLedger(Path(root).expanduser() if root else Path.home() / ".pi" / "agent" / "delegations")
 
 
-def _spawn(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+def _spawn(
+    value: dict[str, Any],
+    cwd: Path,
+    *,
+    orca_client: OrcaClient | None = None,
+) -> dict[str, Any]:
     value = dict(value)
     value.setdefault("runId", "run-" + uuid.uuid4().hex)
     value.setdefault("workerId", "worker-" + uuid.uuid4().hex)
-    manifest = _resolve(value, cwd)
+    lock = json.loads((cwd / "catalog" / "catalog.lock.json").read_text(encoding="utf-8"))
+    plan = compile_repo_scout(
+        _request(value),
+        lock,
+        run_id=value["runId"],
+        worker_id=value["workerId"],
+        repository_id=value.get("repositoryId", "current-repository"),
+        repository_root=value.get("repositoryRoot", str(cwd)),
+        backend=value.get("backend", "orca-pi"),
+    )
+    manifest = plan.manifest
     run_id = manifest.to_dict()["runId"]
     worker_id = manifest.to_dict()["workerId"]
     ledger = _ledger(cwd)
     ledger.create_run(run_id, _request(value))
     ledger.write_manifest(run_id, worker_id, manifest)
-    events = ledger.read_events(run_id).events
-    sequence = events[-1].to_dict()["sequence"] + 1 if events else 0
-    ledger.append_event(
-        {
-            "schemaVersion": 1,
-            "eventId": uuid.uuid4().hex,
-            "runId": run_id,
-            "workerId": worker_id,
-            "sequence": sequence,
-            "timestamp": utc_now(),
-            "type": "worker.compiled",
-            "idempotencyKey": f"{run_id}/{worker_id}/compile/1",
-            "data": {},
-        }
+    launched = launch_repo_scout(
+        plan,
+        lock,
+        catalog_root=cwd / "catalog",
+        repository_root=value.get("repositoryRoot", str(cwd)),
+        ledger=ledger,
+        client=orca_client or OrcaClient(),
     )
     return {
         "status": "ok",
@@ -142,8 +157,14 @@ def _spawn(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
         "runId": run_id,
         "workerId": worker_id,
         "manifest": _manifest_summary(manifest.to_dict()),
-        "state": "compiled",
-        "backend": "not-started",
+        "state": "running",
+        "backend": "orca-pi",
+        "backendIdentities": {
+            "run": launched.native_run_id,
+            "task": launched.task_id,
+            "terminal": launched.terminal_handle,
+            "dispatch": launched.dispatch_id,
+        },
     }
 
 
@@ -237,12 +258,45 @@ def _digest(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
     return {"status": "ok", "action": "digest", "runs": runs, "orphaned": orphaned, "maxRuns": maximum}
 
 
-def _collect(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
+def _collect(
+    value: dict[str, Any],
+    cwd: Path,
+    *,
+    orca_client: OrcaClient | None = None,
+) -> dict[str, Any]:
     run_id = value.get("runId")
     worker_id = value.get("workerId")
     if not isinstance(run_id, str) or not run_id or not isinstance(worker_id, str) or not worker_id:
         raise ValueError("runId and workerId are required for collect")
     ledger = _ledger(cwd)
+    backend_path = ledger.root / run_id / "backend.json"
+    if backend_path.exists():
+        backend = ledger.read_backend(run_id)
+        if backend["identities"].get(f"dispatch:{worker_id}"):
+            result = collect_repo_scout(
+                run_id,
+                worker_id,
+                repository_root=value.get("repositoryRoot", str(cwd)),
+                ledger=ledger,
+                observer=OrcaObserver(orca_client or OrcaClient(), report_root=ledger.root),
+                timeout_ms=1,
+            )
+            if result is None:
+                return {
+                    "status": "ok",
+                    "action": "collect",
+                    "runId": run_id,
+                    "workerId": worker_id,
+                    "state": "pending",
+                }
+            return {
+                "status": "ok",
+                "action": "collect",
+                "runId": run_id,
+                "workerId": worker_id,
+                "state": "collected",
+                "result": result.to_dict(),
+            }
     try:
         result = ledger.read_result(run_id, worker_id).to_dict()
     except Exception as error:
@@ -252,7 +306,12 @@ def _collect(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
     return {"status": "ok", "action": "collect", "runId": run_id, "workerId": worker_id, "state": "collected", "result": result}
 
 
-def dispatch(value: dict[str, Any], cwd: str | Path) -> dict[str, Any]:
+def dispatch(
+    value: dict[str, Any],
+    cwd: str | Path,
+    *,
+    orca_client: OrcaClient | None = None,
+) -> dict[str, Any]:
     """Execute one validated core action; exposed for no-model tests."""
 
     root = Path(cwd).resolve()
@@ -262,13 +321,13 @@ def dispatch(value: dict[str, Any], cwd: str | Path) -> dict[str, Any]:
     if action == "preview":
         return {"status": "ok", "action": "preview", "manifest": _manifest_summary(_resolve(value, root).to_dict())}
     if action == "spawn":
-        return _spawn(value, root)
+        return _spawn(value, root, orca_client=orca_client)
     if action == "status":
         return _status(value, root)
     if action == "digest":
         return _digest(value, root)
     if action == "collect":
-        return _collect(value, root)
+        return _collect(value, root, orca_client=orca_client)
     if action == "cancel":
         return _cancel(value, root)
     if action == "integrate":
@@ -299,7 +358,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 2
-    except (OSError, json.JSONDecodeError, ValueError, KeyError, ResolutionError) as error:
+    except (
+        OSError,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+        ResolutionError,
+        OrcaError,
+        VerticalSliceError,
+    ) as error:
         return _error(str(error))
 
 

@@ -12,12 +12,41 @@ from pathlib import Path
 import pytest
 
 from forge.orchestrator.cli import _load_input, dispatch
-from forge.orchestrator.ledger import RunLedger
+from forge.orchestrator.ledger import RunLedger, utc_now
+from forge.orchestrator.orca import CommandResult, OrcaClient
+from forge.orchestrator.resolver import resolve_request
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures" / "orchestrator"
 VALID = json.loads((FIXTURES / "valid-contracts.json").read_text(encoding="utf-8"))
 REQUEST = VALID["worker-request"]
+REQUEST["workspace"]["baseRevision"] = subprocess.check_output(
+    ["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True
+).strip()
+
+
+def _launch_client():
+    def runner(argv):
+        command = " ".join(argv)
+        if command.startswith("orca status"):
+            result = {"runtime": {"capabilities": ["orchestration.contract.v1"]}}
+        elif "run-create" in command:
+            result = {"run": {"id": "native-run"}}
+        elif "task-create" in command:
+            result = {"task": {"id": "native-task"}}
+        elif "terminal create" in command:
+            result = {"terminal": {"handle": "native-terminal"}}
+        elif "terminal wait" in command:
+            result = {"timedOut": False}
+        elif "worker-start" in command:
+            result = {"dispatchId": "native-dispatch"}
+        elif "orchestration check" in command:
+            result = {"deliveryId": None, "messages": [], "timedOut": True}
+        else:
+            raise AssertionError(command)
+        return CommandResult(0, json.dumps({"ok": True, "result": result}))
+
+    return OrcaClient(runner=runner)
 
 
 def test_catalog_and_preview_are_no_model_core_actions():
@@ -48,7 +77,9 @@ def test_unknown_core_input_fields_fail_before_dispatch(tmp_path):
 def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
     monkeypatch.setattr("forge.orchestrator.cli.utc_now", lambda: "2099-01-01T00:00:00Z")
+    monkeypatch.setattr("forge.orchestrator.verticals.utc_now", lambda: "2099-01-01T00:00:00Z")
     request = copy.deepcopy(REQUEST)
+    client = _launch_client()
     spawned = dispatch(
         {
             "action": "spawn",
@@ -57,12 +88,14 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
             "workerId": "repo-scout",
         },
         REPO,
+        orca_client=client,
     )
-    assert spawned["state"] == "compiled"
+    assert spawned["state"] == "running"
+    assert spawned["backendIdentities"]["dispatch"] == "native-dispatch"
 
     status = dispatch({"action": "status", "runId": "run-cli"}, REPO)
     assert status["projection"]["runId"] == "run-cli"
-    assert status["eventCount"] == 2
+    assert status["eventCount"] == 9
     events = RunLedger(tmp_path / "delegations").read_events("run-cli").to_dicts()
     assert [event["timestamp"] for event in events] == sorted(
         event["timestamp"] for event in events
@@ -70,7 +103,9 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
     assert events[1]["timestamp"] == "2099-01-01T00:00:00Z"
 
     collected = dispatch(
-        {"action": "collect", "runId": "run-cli", "workerId": "repo-scout"}, REPO
+        {"action": "collect", "runId": "run-cli", "workerId": "repo-scout"},
+        REPO,
+        orca_client=client,
     )
     assert collected["state"] == "pending"
     digest = dispatch({"action": "digest", "maxRuns": 10}, REPO)
@@ -79,10 +114,33 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
 
 
 def test_cancel_targets_a_persisted_queued_worker(tmp_path, monkeypatch):
-    monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
-    dispatch(
-        {"action": "spawn", "request": REQUEST, "runId": "run-cancel", "workerId": "repo-scout"},
-        REPO,
+    root = tmp_path / "delegations"
+    monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(root))
+    ledger = RunLedger(root)
+    ledger.create_run("run-cancel", REQUEST)
+    lock = json.loads((REPO / "catalog/catalog.lock.json").read_text())
+    manifest = resolve_request(
+        REQUEST,
+        lock,
+        run_id="run-cancel",
+        worker_id="repo-scout",
+        repository_id="repo",
+        repository_root=REPO,
+        backend="orca-pi",
+    )
+    ledger.write_manifest("run-cancel", "repo-scout", manifest)
+    ledger.append_event(
+        {
+            "schemaVersion": 1,
+            "eventId": "compiled-cancel",
+            "runId": "run-cancel",
+            "workerId": "repo-scout",
+            "sequence": 1,
+            "timestamp": utc_now(),
+            "type": "worker.compiled",
+            "idempotencyKey": "run-cancel/repo-scout/compiled/1",
+            "data": {},
+        }
     )
     cancelled = dispatch(
         {"action": "cancel", "runId": "run-cancel", "reason": "stop"},

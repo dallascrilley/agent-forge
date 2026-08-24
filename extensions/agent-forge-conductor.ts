@@ -195,11 +195,11 @@ export default function (pi: ExtensionAPI) {
     name: "delegate",
     label: "Delegate",
     description:
-      "Delegate through the durable Agent Forge core. Use catalog to inspect capability summaries, preview to resolve a WorkerRequest without side effects, spawn to persist a compiled run, status/collect to inspect durable state, and cancel/integrate only when the core reports those operations available.",
+      "Delegate through the durable Agent Forge core. Use catalog to inspect capability summaries, preview to resolve a WorkerRequest without side effects, spawn to launch a supervised Orca worker, status/collect to inspect durable state, and cancel/integrate only when the core reports those operations available.",
     promptSnippet: "Delegate a constrained task through the durable Agent Forge conductor",
     promptGuidelines: [
       "Use delegate with action catalog before guessing available capabilities.",
-      "Use delegate preview before spawn when the WorkerRequest or resolved resources need inspection.",
+      "Use delegate preview before spawn; spawn creates live Orca resources and may consume model credentials.",
       "Never put shell commands, filesystem paths, MCP endpoints, credentials, or system prompts in the WorkerRequest.",
     ],
     parameters: DelegateParameters,

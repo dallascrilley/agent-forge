@@ -67,6 +67,22 @@ _EMPTY_INDEX = {
     "active": [],
     "recent": [],
 }
+_CANCELLATION_STATUSES = {
+    "requested",
+    "stopped",
+    "abandoned",
+    "already-stopped",
+    "outcome-unknown",
+    "operation-failed",
+}
+_CANCELLATION_TRANSITIONS = {
+    "requested": _CANCELLATION_STATUSES - {"requested"},
+    "outcome-unknown": {"stopped", "abandoned", "operation-failed"},
+    "operation-failed": {"stopped", "abandoned", "outcome-unknown"},
+    "stopped": set(),
+    "abandoned": set(),
+    "already-stopped": set(),
+}
 
 
 class LedgerError(RuntimeError):
@@ -253,6 +269,56 @@ def _validate_backend(document: dict[str, Any]) -> dict[str, Any]:
         "idempotencyKeys": _validate_map(
             document["idempotencyKeys"], integer_values=False, path="backend.idempotencyKeys"
         ),
+    }
+
+
+def _validate_cancellation(document: dict[str, Any]) -> dict[str, Any]:
+    required = {
+        "schemaVersion",
+        "runId",
+        "workerId",
+        "dispatchId",
+        "reason",
+        "status",
+        "requestedAt",
+        "updatedAt",
+        "evidenceSource",
+        "evidenceCursor",
+        "evidenceDigest",
+        "backendState",
+        "lastError",
+    }
+    if set(document) != required:
+        raise LedgerValidationError("cancellation document has unknown or missing fields")
+    if document["schemaVersion"] != _SCHEMA_VERSION:
+        raise LedgerValidationError("cancellation schemaVersion must be 1")
+    run_id = _check_run_id(document["runId"], "cancellation.runId")
+    worker_id = _check_run_id(document["workerId"], "cancellation.workerId")
+    dispatch_id = _check_run_id(document["dispatchId"], "cancellation.dispatchId")
+    reason = document["reason"]
+    if not isinstance(reason, str) or not reason:
+        raise LedgerValidationError("cancellation.reason must be non-empty")
+    status = document["status"]
+    if status not in _CANCELLATION_STATUSES:
+        raise LedgerValidationError(
+            f"cancellation.status must be one of {sorted(_CANCELLATION_STATUSES)!r}"
+        )
+    strings = {}
+    for field in ("evidenceSource", "evidenceCursor", "evidenceDigest", "backendState", "lastError"):
+        value = document[field]
+        if not isinstance(value, str):
+            raise LedgerValidationError(f"cancellation.{field} must be a string")
+        strings[field] = value
+    return {
+        "schemaVersion": 1,
+        "runId": run_id,
+        "workerId": worker_id,
+        "dispatchId": dispatch_id,
+        "reason": reason,
+        "status": status,
+        "requestedAt": _check_timestamp(document["requestedAt"], "cancellation.requestedAt"),
+        "updatedAt": _check_timestamp(document["updatedAt"], "cancellation.updatedAt"),
+        **strings,
     }
 
 
@@ -518,6 +584,99 @@ class RunLedger:
         document = _validate_backend(current)
         _write_json(backend_path, document)
         return document
+
+    def request_cancellation(
+        self,
+        run_id: str,
+        worker_id: str,
+        dispatch_id: str,
+        reason: str,
+        *,
+        timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist cancellation intent before any backend lifecycle mutation."""
+
+        now = timestamp or utc_now()
+        document = _validate_cancellation(
+            _redact(
+                {
+                    "schemaVersion": 1,
+                    "runId": run_id,
+                    "workerId": worker_id,
+                    "dispatchId": dispatch_id,
+                    "reason": reason,
+                    "status": "requested",
+                    "requestedAt": now,
+                    "updatedAt": now,
+                    "evidenceSource": "",
+                    "evidenceCursor": "",
+                    "evidenceDigest": "",
+                    "backendState": "",
+                    "lastError": "",
+                },
+                self.secret_values,
+            )
+        )
+        run_dir = self._ensure_run(run_id)
+        path = run_dir / "cancellation.json"
+        with _exclusive_lock(run_dir / ".cancellation.lock"):
+            if path.exists():
+                existing = _validate_cancellation(_json_document(path, path))
+                identity = ("runId", "workerId", "dispatchId", "reason")
+                if any(existing[field] != document[field] for field in identity):
+                    raise LedgerConflictError("cancellation intent already binds different identity or reason")
+                return existing
+            _write_json(path, document)
+        return document
+
+    def update_cancellation(
+        self,
+        run_id: str,
+        status: str,
+        *,
+        evidence_source: str = "",
+        evidence_cursor: str = "",
+        evidence_digest: str = "",
+        backend_state: str = "",
+        last_error: str = "",
+        timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        """Advance a persisted cancellation through its closed recovery states."""
+
+        run_dir = self._run_dir(run_id)
+        path = run_dir / "cancellation.json"
+        with _exclusive_lock(run_dir / ".cancellation.lock"):
+            current = _validate_cancellation(_json_document(path, path))
+            if status != current["status"] and status not in _CANCELLATION_TRANSITIONS[current["status"]]:
+                raise LedgerConflictError(
+                    f"illegal cancellation transition {current['status']!r} -> {status!r}"
+                )
+            updated = _validate_cancellation(
+                _redact(
+                    {
+                        **current,
+                        "status": status,
+                        "updatedAt": timestamp or utc_now(),
+                        "evidenceSource": evidence_source or current["evidenceSource"],
+                        "evidenceCursor": evidence_cursor or current["evidenceCursor"],
+                        "evidenceDigest": evidence_digest or current["evidenceDigest"],
+                        "backendState": backend_state or current["backendState"],
+                        "lastError": last_error or current["lastError"],
+                    },
+                    self.secret_values,
+                )
+            )
+            if status == current["status"]:
+                stable_fields = set(updated) - {"updatedAt"}
+                if any(updated[field] != current[field] for field in stable_fields):
+                    raise LedgerConflictError("terminal cancellation state cannot be rewritten")
+                return current
+            _write_json(path, updated)
+        return updated
+
+    def read_cancellation(self, run_id: str) -> dict[str, Any]:
+        path = self._run_dir(run_id) / "cancellation.json"
+        return _validate_cancellation(_json_document(path, path))
 
     def write_disposition(
         self,

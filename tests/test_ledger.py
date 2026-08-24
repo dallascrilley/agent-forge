@@ -121,6 +121,59 @@ def test_contract_documents_backend_and_terminal_projection(tmp_path):
     assert ledger.read_events("run-1").events[-1].to_dict()["type"] == "worker.completed"
 
 
+def test_cancellation_intent_and_terminal_backend_evidence_are_durable(tmp_path):
+    ledger = RunLedger(tmp_path)
+    ledger.create_run("run-1", REQUEST)
+    requested = ledger.request_cancellation(
+        "run-1",
+        "repo-scout",
+        "dispatch-1",
+        "operator requested stop",
+        timestamp="2026-08-23T00:01:00Z",
+    )
+    replay = ledger.request_cancellation(
+        "run-1",
+        "repo-scout",
+        "dispatch-1",
+        "operator requested stop",
+        timestamp="2026-08-23T00:02:00Z",
+    )
+    assert replay == requested
+    stopped = ledger.update_cancellation(
+        "run-1",
+        "stopped",
+        evidence_source="terminal",
+        evidence_cursor="7",
+        evidence_digest="sha256:" + "a" * 64,
+        backend_state="stopped",
+        timestamp="2026-08-23T00:03:00Z",
+    )
+    assert stopped["reason"] == "operator requested stop"
+    assert stopped["evidenceCursor"] == "7"
+    assert ledger.read_cancellation("run-1") == stopped
+    assert ledger.update_cancellation("run-1", "stopped") == stopped
+    with pytest.raises(LedgerConflictError, match="terminal cancellation state"):
+        ledger.update_cancellation("run-1", "stopped", backend_state="different")
+    with pytest.raises(LedgerConflictError, match="illegal cancellation transition"):
+        ledger.update_cancellation("run-1", "abandoned")
+    with pytest.raises(LedgerConflictError, match="different identity or reason"):
+        ledger.request_cancellation("run-1", "repo-scout", "dispatch-1", "different")
+
+
+def test_unknown_cancellation_outcome_can_reconcile_to_stopped(tmp_path):
+    ledger = RunLedger(tmp_path)
+    ledger.create_run("run-1", REQUEST)
+    ledger.request_cancellation("run-1", "repo-scout", "dispatch-1", "stop")
+    ledger.update_cancellation(
+        "run-1",
+        "outcome-unknown",
+        last_error="retry with exact receipt retry-stop-1",
+    )
+    stopped = ledger.update_cancellation("run-1", "stopped", backend_state="stopped")
+    assert stopped["status"] == "stopped"
+    assert "retry-stop-1" in stopped["lastError"]
+
+
 def test_terminal_projection_is_not_published_before_terminal_evidence(tmp_path, monkeypatch):
     ledger = RunLedger(tmp_path)
     ledger.create_run("run-1", REQUEST, timestamp="2026-08-23T00:00:00Z")

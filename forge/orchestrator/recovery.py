@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from .ledger import RunLedger
-from .orca import OrcaClient, OrcaError
+from .canonical import canonical_bytes
+from .ledger import LedgerConflictError, RunLedger
+from .orca import OrcaClient, OrcaError, OrcaUnknownEffect
+from .reducer import reduce_events
 
 RecoveryState = Literal[
     "ready",
@@ -184,4 +187,138 @@ class OrcaRecovery:
             execution.decision,
             evidence,
             receipt,
+        )
+
+    def cancel(self, run_id: str, node_id: str, reason: str) -> RecoveryExecution:
+        """Persist intent, preserve evidence, stop exact authority, then publish cancellation."""
+
+        if not isinstance(reason, str) or not reason:
+            raise RecoveryError("cancellation reason must be non-empty")
+        existing_path = self.ledger.root / run_id / "cancellation.json"
+        if existing_path.exists():
+            existing = self.ledger.read_cancellation(run_id)
+            if existing["workerId"] != node_id or existing["reason"] != reason:
+                raise LedgerConflictError("cancellation intent already binds different worker or reason")
+            if existing["status"] in {"stopped", "already-stopped"}:
+                self._finalize_cancelled(run_id, node_id, reason)
+                return RecoveryExecution(
+                    existing["dispatchId"],
+                    RecoveryObservation("stopped"),
+                    RecoveryDecision("record_cancelled", "durable cancellation already completed"),
+                )
+            if existing["status"] == "abandoned":
+                raise RecoveryError("worker was explicitly abandoned; resources may remain live")
+            if existing["status"] in {"outcome-unknown", "operation-failed"}:
+                raise RecoveryError("cancellation requires explicit receipt-based reconciliation")
+        inspected = self.inspect(run_id, node_id, "cancel")
+        if inspected.decision.action not in {"stop", "record_cancelled"}:
+            raise RecoveryError(
+                f"cannot cancel from {inspected.observation.state!r}: {inspected.decision.reason}"
+            )
+        self.ledger.request_cancellation(run_id, node_id, inspected.dispatch_id, reason)
+        try:
+            executed = self.execute(inspected)
+        except OrcaUnknownEffect as error:
+            retry = f"retry-request={error.retry_request}" if error.retry_request else "retry receipt unavailable"
+            self.ledger.update_cancellation(
+                run_id,
+                "outcome-unknown",
+                last_error=f"{error}; {retry}",
+            )
+            raise
+        except OrcaError as error:
+            self.ledger.update_cancellation(run_id, "operation-failed", last_error=str(error)[:300])
+            raise
+
+        if executed.decision.action == "record_cancelled":
+            self.ledger.update_cancellation(
+                run_id,
+                "already-stopped",
+                backend_state=executed.observation.state,
+            )
+        else:
+            evidence = executed.evidence or {}
+            digest = "sha256:" + hashlib.sha256(canonical_bytes(evidence)).hexdigest()
+            cursor = evidence.get("cursor")
+            state = (executed.receipt or {}).get("state")
+            self.ledger.update_cancellation(
+                run_id,
+                "stopped",
+                evidence_source=str(evidence.get("source") or "unknown"),
+                evidence_cursor=str(cursor) if cursor is not None else "",
+                evidence_digest=digest,
+                backend_state=str(state or "stopped"),
+            )
+        self._finalize_cancelled(run_id, node_id, reason)
+        return executed
+
+    def abandon(self, run_id: str, node_id: str, reason: str) -> RecoveryExecution:
+        """Explicitly fence lifecycle authority without claiming resources stopped."""
+
+        if not isinstance(reason, str) or not reason:
+            raise RecoveryError("abandon reason must be non-empty")
+        existing_path = self.ledger.root / run_id / "cancellation.json"
+        if existing_path.exists():
+            existing = self.ledger.read_cancellation(run_id)
+            if existing["workerId"] != node_id or existing["reason"] != reason:
+                raise LedgerConflictError("cancellation intent already binds different worker or reason")
+            if existing["status"] == "abandoned":
+                self._finalize_cancelled(
+                    run_id, node_id, reason + "; resources may remain live"
+                )
+                return RecoveryExecution(
+                    existing["dispatchId"],
+                    RecoveryObservation("outcome_unknown"),
+                    RecoveryDecision("abandon", "durable abandon already completed"),
+                )
+            if existing["status"] in {"stopped", "already-stopped"}:
+                raise RecoveryError("worker is already proven stopped")
+            if existing["status"] in {"outcome-unknown", "operation-failed"}:
+                raise RecoveryError("abandon requires explicit receipt-based reconciliation")
+        inspected = self.inspect(run_id, node_id, "abandon")
+        if inspected.decision.action != "abandon":
+            raise RecoveryError(
+                f"cannot abandon from {inspected.observation.state!r}: {inspected.decision.reason}"
+            )
+        self.ledger.request_cancellation(run_id, node_id, inspected.dispatch_id, reason)
+        try:
+            executed = self.execute(inspected)
+        except OrcaUnknownEffect as error:
+            retry = f"retry-request={error.retry_request}" if error.retry_request else "retry receipt unavailable"
+            self.ledger.update_cancellation(
+                run_id,
+                "outcome-unknown",
+                last_error=f"{error}; {retry}",
+            )
+            raise
+        except OrcaError as error:
+            self.ledger.update_cancellation(run_id, "operation-failed", last_error=str(error)[:300])
+            raise
+        state = (executed.receipt or {}).get("state")
+        self.ledger.update_cancellation(
+            run_id,
+            "abandoned",
+            backend_state=str(state or "abandoned-resources-may-be-live"),
+        )
+        self._finalize_cancelled(run_id, node_id, reason + "; resources may remain live")
+        return executed
+
+    def _finalize_cancelled(self, run_id: str, node_id: str, reason: str) -> None:
+        disposition_path = self.ledger.root / run_id / "disposition.json"
+        if disposition_path.exists():
+            disposition = self.ledger.read_disposition(run_id)
+            if disposition["status"] != "cancelled":
+                raise LedgerConflictError("run already has a non-cancelled terminal disposition")
+            return
+        projection = reduce_events(self.ledger.read_events(run_id).events)
+        worker = projection.worker(node_id)
+        if worker.status == "cancelled":
+            return
+        if worker.status not in {"queued", "preparing", "launched", "running"}:
+            raise RecoveryError(f"cannot publish cancellation from worker state {worker.status!r}")
+        self.ledger.mark_terminal(
+            run_id,
+            "cancelled",
+            reason,
+            worker_id=node_id,
         )

@@ -100,7 +100,13 @@ def _active_recovery(tmp_path, runner):
     ledger.write_backend(
         "run-1",
         "orca-pi",
-        identities={"run": "native-run", "dispatch:repo-scout": "dispatch-1"},
+        identities={
+            "run": "native-run",
+            "task:repo-scout": "task-1",
+            "dispatch:repo-scout": "dispatch-1",
+            "dispatch:repo-scout:attempt:1": "dispatch-1",
+            "attempt-count:repo-scout": "1",
+        },
     )
     return OrcaRecovery(OrcaClient(runner=runner), ledger)
 
@@ -182,6 +188,101 @@ def test_source_change_restarts_read_without_old_cursor(tmp_path):
     assert len(calls) == 1
     assert "worker-read" in calls[0]
     assert "--cursor" not in calls[0]
+
+
+def test_typed_retry_decision_creates_one_fresh_linked_attempt(tmp_path):
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        command = " ".join(argv)
+        if "terminal create" in command:
+            result = {"terminal": {"handle": "term-retry"}}
+        elif "terminal wait" in command:
+            result = {"timedOut": False}
+        elif "worker-start" in command:
+            result = {"dispatchId": "dispatch-2"}
+        else:
+            raise AssertionError(command)
+        return CommandResult(0, json.dumps({"ok": True, "result": result}))
+
+    recovery = _active_recovery(tmp_path, runner)
+    observation = RecoveryObservation(
+        "failed",
+        model_turn_started=False,
+        transient_startup_failure=True,
+        retry_count=0,
+    )
+    execution = RecoveryExecution(
+        "dispatch-1",
+        observation,
+        decide_recovery(observation, "resume", dispatch_id="dispatch-1"),
+    )
+    launched = recovery.launch_retry(
+        execution,
+        "run-1",
+        "repo-scout",
+        "task-1",
+        "pi --no-session",
+        worktree="path:/repo",
+        title="retry",
+    )
+    assert launched.retry_of == "dispatch-1"
+    assert launched.terminal_handle == "term-retry"
+    assert launched.dispatch_id == "dispatch-2"
+    worker_start = next(call for call in calls if "worker-start" in " ".join(call))
+    assert "--retry-of dispatch-1" in " ".join(worker_start)
+
+    before = len(calls)
+    with pytest.raises(RecoveryError, match="typed retry decision"):
+        recovery.launch_retry(
+            RecoveryExecution(
+                "dispatch-2",
+                RecoveryObservation("ready"),
+                RecoveryDecision("wait", "still active"),
+            ),
+            "run-1",
+            "repo-scout",
+            "task-1",
+            "pi",
+            worktree="path:/repo",
+            title="forbidden",
+        )
+    assert len(calls) == before
+
+
+def test_stale_retry_authorization_fails_before_terminal_creation(tmp_path):
+    calls = []
+    recovery = _active_recovery(
+        tmp_path,
+        lambda argv: calls.append(tuple(argv)),
+    )
+    recovery.ledger.update_backend(
+        "run-1", identities={"dispatch:repo-scout": "dispatch-changed"}
+    )
+    observation = RecoveryObservation(
+        "failed",
+        model_turn_started=False,
+        transient_startup_failure=True,
+        retry_count=0,
+    )
+    execution = RecoveryExecution(
+        "dispatch-1",
+        observation,
+        decide_recovery(observation, "resume", dispatch_id="dispatch-1"),
+    )
+    with pytest.raises(RecoveryError, match="changed after retry authorization"):
+        recovery.launch_retry(
+            execution,
+            "run-1",
+            "repo-scout",
+            "task-1",
+            "pi",
+            worktree="path:/repo",
+            title="must-not-create",
+        )
+    assert calls == []
+    assert "terminal:repo-scout:attempt:2" not in recovery.ledger.read_backend("run-1")["identities"]
 
 
 def test_high_level_cancel_persists_evidence_and_terminal_disposition(tmp_path):

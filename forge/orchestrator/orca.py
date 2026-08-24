@@ -153,22 +153,29 @@ class OrcaClient:
             mutating=True,
         ).result
 
-    def worker_start(self, task_id: str, *, run_id: str, terminal: str) -> dict[str, Any]:
-        return self._invoke(
-            (
-                "orchestration",
-                "worker-start",
-                "--task",
-                task_id,
-                "--run",
-                run_id,
-                "--terminal",
-                terminal,
-                "--worktree",
-                "current",
-            ),
-            mutating=True,
-        ).result
+    def worker_start(
+        self,
+        task_id: str,
+        *,
+        run_id: str,
+        terminal: str,
+        retry_of: str | None = None,
+    ) -> dict[str, Any]:
+        args = (
+            "orchestration",
+            "worker-start",
+            "--task",
+            task_id,
+            "--run",
+            run_id,
+            "--terminal",
+            terminal,
+            "--worktree",
+            "current",
+        )
+        if retry_of:
+            args += ("--retry-of", retry_of)
+        return self._invoke(args, mutating=True).result
 
     def worker_done(
         self,
@@ -399,11 +406,51 @@ class OrcaBackend:
         title: str,
         readiness_timeout_ms: int = 30000,
     ) -> str:
+        return self._ensure_terminal_identity(
+            run_id,
+            f"terminal:{node_id}",
+            command,
+            worktree=worktree,
+            title=title,
+            readiness_timeout_ms=readiness_timeout_ms,
+        )
+
+    def ensure_retry_terminal(
+        self,
+        run_id: str,
+        node_id: str,
+        command: str,
+        *,
+        worktree: str,
+        title: str,
+        readiness_timeout_ms: int = 30000,
+    ) -> str:
+        """Create or reconcile the sole allowed replacement terminal."""
+
+        return self._ensure_terminal_identity(
+            run_id,
+            f"terminal:{node_id}:attempt:2",
+            command,
+            worktree=worktree,
+            title=title,
+            readiness_timeout_ms=readiness_timeout_ms,
+        )
+
+    def _ensure_terminal_identity(
+        self,
+        run_id: str,
+        identity_key: str,
+        command: str,
+        *,
+        worktree: str,
+        title: str,
+        readiness_timeout_ms: int,
+    ) -> str:
         backend_path = self.ledger.root / run_id / "backend.json"
         handle = None
         if backend_path.exists():
             existing = self.ledger.read_backend(run_id)
-            handle = existing["identities"].get(f"terminal:{node_id}")
+            handle = existing["identities"].get(identity_key)
             if handle:
                 self.client.terminal_show(handle)
         if handle is None:
@@ -412,7 +459,7 @@ class OrcaBackend:
             handle = result.get("handle") or (terminal.get("handle") if isinstance(terminal, dict) else None)
             if not isinstance(handle, str) or not handle:
                 raise OrcaError("terminal create returned no terminal handle")
-            self.ledger.update_backend(run_id, identities={f"terminal:{node_id}": handle})
+            self.ledger.update_backend(run_id, identities={identity_key: handle})
         readiness = self.client.terminal_wait(handle, timeout_ms=readiness_timeout_ms)
         if readiness.get("timedOut") is True or readiness.get("timed_out") is True:
             raise OrcaError(f"terminal {handle!r} did not become ready before the timeout")
@@ -428,6 +475,14 @@ class OrcaBackend:
             raise OrcaError(f"cannot read persisted Orca identities for run {run_id!r}: {error}") from error
         existing_id = existing["identities"].get(f"dispatch:{node_id}")
         if existing_id:
+            if not existing["identities"].get(f"dispatch:{node_id}:attempt:1"):
+                self.ledger.update_backend(
+                    run_id,
+                    identities={
+                        f"dispatch:{node_id}:attempt:1": existing_id,
+                        f"attempt-count:{node_id}": "1",
+                    },
+                )
             self.client.worker_show(existing_id)
             return existing_id
         native_run_id = existing["identities"].get("run")
@@ -437,7 +492,77 @@ class OrcaBackend:
         dispatch = result.get("dispatchId") or result.get("dispatch", {}).get("id")
         if not isinstance(dispatch, str) or not dispatch:
             raise OrcaError("worker-start returned no dispatch id")
-        self.ledger.update_backend(run_id, identities={f"dispatch:{node_id}": dispatch})
+        self.ledger.update_backend(
+            run_id,
+            identities={
+                f"dispatch:{node_id}": dispatch,
+                f"dispatch:{node_id}:attempt:1": dispatch,
+                f"attempt-count:{node_id}": "1",
+            },
+        )
+        return dispatch
+
+    def launch_retry(
+        self,
+        run_id: str,
+        node_id: str,
+        task_id: str,
+        terminal: str,
+        *,
+        retry_of: str,
+    ) -> str:
+        """Launch the sole replacement attempt linked to exact failed provenance."""
+
+        try:
+            backend = self.ledger.read_backend(run_id)
+        except LedgerError as error:
+            raise OrcaError(f"cannot read persisted Orca identities for run {run_id!r}: {error}") from error
+        identities = backend["identities"]
+        current = identities.get(f"dispatch:{node_id}")
+        persisted_task = identities.get(f"task:{node_id}")
+        if persisted_task != task_id:
+            raise OrcaError("retry task does not match the persisted Orca Task")
+        existing_retry = identities.get(f"dispatch:{node_id}:attempt:2")
+        if existing_retry:
+            if identities.get(f"retry-of:{node_id}:attempt:2") != retry_of:
+                raise OrcaError("persisted retry provenance does not match retry-of")
+            self.client.worker_show(existing_retry)
+            return existing_retry
+        if not current or current != retry_of:
+            raise OrcaError("retry-of does not match the current persisted Dispatch")
+        count = identities.get(f"attempt-count:{node_id}")
+        if count is None:
+            self.ledger.update_backend(
+                run_id,
+                identities={
+                    f"dispatch:{node_id}:attempt:1": current,
+                    f"attempt-count:{node_id}": "1",
+                },
+            )
+            count = "1"
+        if count != "1":
+            raise OrcaError("repo-scout permits only one replacement attempt")
+        native_run_id = identities.get("run")
+        if not native_run_id:
+            raise OrcaError(f"no persisted native Orca Run ID for run {run_id!r}")
+        result = self.client.worker_start(
+            task_id,
+            run_id=native_run_id,
+            terminal=terminal,
+            retry_of=retry_of,
+        )
+        dispatch = result.get("dispatchId") or result.get("dispatch", {}).get("id")
+        if not isinstance(dispatch, str) or not dispatch:
+            raise OrcaError("replacement worker-start returned no dispatch id")
+        self.ledger.update_backend(
+            run_id,
+            identities={
+                f"dispatch:{node_id}": dispatch,
+                f"dispatch:{node_id}:attempt:2": dispatch,
+                f"retry-of:{node_id}:attempt:2": retry_of,
+                f"attempt-count:{node_id}": "2",
+            },
+        )
         return dispatch
 
     def reconcile(self, run_id: str, node_id: str) -> dict[str, Any]:

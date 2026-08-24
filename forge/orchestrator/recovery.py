@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from .canonical import canonical_bytes
 from .ledger import LedgerConflictError, RunLedger
-from .orca import OrcaClient, OrcaError, OrcaUnknownEffect
+from .orca import OrcaBackend, OrcaClient, OrcaError, OrcaUnknownEffect
 from .reducer import reduce_events
 
 RecoveryState = Literal[
@@ -61,6 +61,13 @@ class RecoveryExecution:
     decision: RecoveryDecision
     evidence: dict[str, Any] | None = None
     receipt: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class RetryLaunch:
+    retry_of: str
+    terminal_handle: str
+    dispatch_id: str
 
 
 def decide_recovery(
@@ -188,6 +195,53 @@ class OrcaRecovery:
             evidence,
             receipt,
         )
+
+    def launch_retry(
+        self,
+        execution: RecoveryExecution,
+        run_id: str,
+        node_id: str,
+        task_id: str,
+        command: str,
+        *,
+        worktree: str,
+        title: str,
+    ) -> RetryLaunch:
+        """Create one fresh terminal and explicitly link one authorized replacement."""
+
+        if execution.decision.action != "retry" or not execution.decision.retry_of:
+            raise RecoveryError("replacement launch requires a typed retry decision")
+        if execution.dispatch_id != execution.decision.retry_of:
+            raise RecoveryError("retry decision does not match its inspected Dispatch")
+        identities = self.ledger.read_backend(run_id)["identities"]
+        if identities.get(f"task:{node_id}") != task_id:
+            raise RecoveryError("retry task does not match persisted provenance")
+        existing_retry = identities.get(f"dispatch:{node_id}:attempt:2")
+        if existing_retry:
+            if identities.get(f"retry-of:{node_id}:attempt:2") != execution.decision.retry_of:
+                raise RecoveryError("persisted retry link does not match typed authorization")
+        else:
+            if identities.get(f"dispatch:{node_id}") != execution.decision.retry_of:
+                raise RecoveryError("current Dispatch changed after retry authorization")
+            count = identities.get(f"attempt-count:{node_id}", "1")
+            if count != "1":
+                raise RecoveryError("replacement attempt is already exhausted")
+        backend = OrcaBackend(self.client, self.ledger)
+        terminal = backend.ensure_retry_terminal(
+            run_id,
+            node_id,
+            command,
+            worktree=worktree,
+            title=title,
+        )
+        dispatch = backend.launch_retry(
+            run_id,
+            node_id,
+            task_id,
+            terminal,
+            retry_of=execution.decision.retry_of,
+        )
+        return RetryLaunch(execution.decision.retry_of, terminal, dispatch)
 
     def cancel(self, run_id: str, node_id: str, reason: str) -> RecoveryExecution:
         """Persist intent, preserve evidence, stop exact authority, then publish cancellation."""

@@ -56,6 +56,8 @@ def test_orca_backend_persists_one_run_task_dispatch_provenance(tmp_path):
         "run": "orca-run-1",
         "task:repo-scout": "orca-task-1",
         "dispatch:repo-scout": "orca-dispatch-1",
+        "dispatch:repo-scout:attempt:1": "orca-dispatch-1",
+        "attempt-count:repo-scout": "1",
     }
     assert sum("run-create" in " ".join(call) for call in calls) == 1
     assert sum("task-create" in " ".join(call) for call in calls) == 1
@@ -64,6 +66,72 @@ def test_orca_backend_persists_one_run_task_dispatch_provenance(tmp_path):
     assert "--terminal term-agent" in " ".join(worker_start)
     assert "--run orca-run-1" in " ".join(worker_start)
     assert "--run run-1" not in " ".join(worker_start)
+
+
+def test_one_replacement_attempt_uses_fresh_terminal_and_exact_retry_link(tmp_path):
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        command = " ".join(argv)
+        if command.startswith("orca status"):
+            result = {"runtime": {"capabilities": ["orchestration.contract.v1"]}}
+        elif "run-create" in command:
+            result = {"run": {"id": "orca-run-1"}}
+        elif "task-create" in command:
+            result = {"task": {"id": "orca-task-1"}}
+        elif "terminal create" in command:
+            result = {"terminal": {"handle": "term-retry"}}
+        elif "terminal wait" in command:
+            result = {"timedOut": False}
+        elif "worker-start" in command and "--retry-of" in command:
+            result = {"dispatchId": "dispatch-2"}
+        elif "worker-start" in command:
+            result = {"dispatchId": "dispatch-1"}
+        elif "worker-show" in command:
+            dispatch = argv[argv.index("--dispatch") + 1]
+            result = {"dispatch": {"id": dispatch}}
+        else:
+            raise AssertionError(command)
+        return CommandResult(0, json.dumps({"ok": True, "result": result}))
+
+    ledger = RunLedger(tmp_path)
+    backend = OrcaBackend(OrcaClient(runner=runner), ledger)
+    task = backend.ensure_task("run-1", "repo-scout", "inspect")
+    first = backend.launch("run-1", "repo-scout", task, "term-first")
+    terminal = backend.ensure_retry_terminal(
+        "run-1",
+        "repo-scout",
+        "pi --no-session",
+        worktree="path:/repo",
+        title="Agent Forge retry",
+    )
+    second = backend.launch_retry(
+        "run-1",
+        "repo-scout",
+        task,
+        terminal,
+        retry_of=first,
+    )
+    assert second == "dispatch-2"
+    assert backend.launch_retry(
+        "run-1", "repo-scout", task, terminal, retry_of=first
+    ) == second
+    identities = ledger.read_backend("run-1")["identities"]
+    assert identities["dispatch:repo-scout:attempt:1"] == "dispatch-1"
+    assert identities["dispatch:repo-scout:attempt:2"] == "dispatch-2"
+    assert identities["retry-of:repo-scout:attempt:2"] == "dispatch-1"
+    assert identities["attempt-count:repo-scout"] == "2"
+    assert identities["terminal:repo-scout:attempt:2"] == "term-retry"
+    retry = next(call for call in calls if "worker-start" in " ".join(call) and "--retry-of" in call)
+    assert "--retry-of dispatch-1" in " ".join(retry)
+    assert "--terminal term-retry" in " ".join(retry)
+    assert sum("worker-start" in " ".join(call) for call in calls) == 2
+
+    before = len(calls)
+    with pytest.raises(OrcaError, match="provenance does not match"):
+        backend.launch_retry("run-1", "repo-scout", task, terminal, retry_of="wrong")
+    assert len(calls) == before
 
 
 def test_terminal_creation_is_exact_ready_and_reuses_its_persisted_handle(tmp_path):

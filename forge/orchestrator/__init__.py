@@ -25,6 +25,7 @@ from .recovery import (
     RecoveryError,
     RecoveryExecution,
     RecoveryObservation,
+    RetryLaunch,
     decide_recovery,
     observation_from_worker_show,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "RecoveryError",
     "RecoveryExecution",
     "RecoveryObservation",
+    "RetryLaunch",
     "ResolutionError",
     "RunLedger",
     "RunState",

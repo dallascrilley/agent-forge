@@ -5,7 +5,9 @@ credential, or state machinery. The GitHub *owner name in repo URLs* is fine
 (the repo is public by design); local machine state and private tooling are not.
 """
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -29,21 +31,29 @@ TEXT_NAMES = {"LICENSE", ".gitignore"}
 
 def iter_text_files():
     self_path = Path(__file__).resolve()
-    for p in sorted(REPO.rglob("*")):
-        if not p.is_file():
-            continue
-        if p.resolve() == self_path:
+    tracked = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "-z"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    for relative in sorted(item for item in tracked.split(b"\0") if item):
+        path = REPO / os.fsdecode(relative)
+        if path.resolve() == self_path:
             continue  # this file literally contains the forbidden patterns
-        if any(part in {".git", ".venv", "__pycache__"} for part in p.parts):
-            continue
-        if p.suffix in TEXT_SUFFIXES or p.name in TEXT_NAMES:
-            yield p
+        if not path.exists() and not path.is_symlink():
+            continue  # a tracked deletion has no current public contents
+        if path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES:
+            yield path
 
 
 def test_no_private_facts():
     hits = []
     for path in iter_text_files():
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        text = (
+            os.readlink(path)
+            if path.is_symlink()
+            else path.read_text(encoding="utf-8", errors="ignore")
+        )
         for pattern, label in FORBIDDEN:
             for lineno, line in enumerate(text.splitlines(), 1):
                 if pattern.search(line):

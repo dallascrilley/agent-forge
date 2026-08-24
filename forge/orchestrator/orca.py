@@ -211,6 +211,18 @@ class OrcaClient:
             args += ("--cursor", cursor)
         return self._invoke(args).result
 
+    def worker_stop(self, dispatch_id: str) -> dict[str, Any]:
+        return self._invoke(
+            ("orchestration", "worker-stop", "--dispatch", dispatch_id),
+            mutating=True,
+        ).result
+
+    def worker_abandon(self, dispatch_id: str) -> dict[str, Any]:
+        return self._invoke(
+            ("orchestration", "worker-abandon", "--dispatch", dispatch_id),
+            mutating=True,
+        ).result
+
     def worker_release(self, dispatch_id: str) -> dict[str, Any]:
         return self._invoke(
             ("orchestration", "worker-release", "--dispatch", dispatch_id), mutating=True

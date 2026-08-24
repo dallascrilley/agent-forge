@@ -19,6 +19,15 @@ from .orca import (
     OrcaSettlementError,
     OrcaUnknownEffect,
 )
+from .recovery import (
+    OrcaRecovery,
+    RecoveryDecision,
+    RecoveryError,
+    RecoveryExecution,
+    RecoveryObservation,
+    decide_recovery,
+    observation_from_worker_show,
+)
 from .reducer import RunState, TransitionError, WorkerState, reduce_event, reduce_events
 from .scheduler import NodeSpec, Scheduler, SchedulerError, validate_plan
 from .verticals import (
@@ -50,8 +59,13 @@ __all__ = [
     "OrcaClient",
     "OrcaError",
     "OrcaObserver",
+    "OrcaRecovery",
     "OrcaSettlementError",
     "OrcaUnknownEffect",
+    "RecoveryDecision",
+    "RecoveryError",
+    "RecoveryExecution",
+    "RecoveryObservation",
     "ResolutionError",
     "RunLedger",
     "RunState",
@@ -60,6 +74,8 @@ __all__ = [
     "TransientLaunchError",
     "UnknownEffectError",
     "WorkerState",
+    "decide_recovery",
+    "observation_from_worker_show",
     "reduce_event",
     "reduce_events",
     "NodeSpec",

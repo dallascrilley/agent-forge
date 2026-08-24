@@ -106,7 +106,9 @@ class EventRecovery:
         return [event.to_dict() for event in self.events]
 
 
-def _now() -> str:
+def utc_now() -> str:
+    """Return the shared RFC3339 UTC timestamp used by durable records."""
+
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
@@ -339,7 +341,7 @@ class RunLedger:
         _check_run_id(run_id)
         if not isinstance(status, str) or not status:
             raise LedgerValidationError("index status must be non-empty")
-        timestamp = _check_timestamp(updated_at, "index.updatedAt") if updated_at else _now()
+        timestamp = _check_timestamp(updated_at, "index.updatedAt") if updated_at else utc_now()
         entry = {"runId": run_id, "status": status, "updatedAt": timestamp}
         with _exclusive_lock(self._index_lock):
             index = self._load_index_unlocked()
@@ -379,7 +381,7 @@ class RunLedger:
                         "runId": run_id,
                         "workerId": run_id,
                         "sequence": 0,
-                        "timestamp": timestamp or _now(),
+                        "timestamp": timestamp or utc_now(),
                         "type": "run.requested",
                         "idempotencyKey": f"{run_id}/request/1",
                         "data": {},
@@ -415,7 +417,7 @@ class RunLedger:
             return existing
         atomic_write(request_path, data)
         self._set_index(run_id, "requested", terminal=False, updated_at=timestamp)
-        event_time = timestamp or _now()
+        event_time = timestamp or utc_now()
         self.append_event(
             {
                 "schemaVersion": 1,
@@ -532,7 +534,7 @@ class RunLedger:
                     "runId": run_id,
                     "status": status,
                     "reason": reason,
-                    "updatedAt": updated_at or _now(),
+                    "updatedAt": updated_at or utc_now(),
                 },
                 self.secret_values,
             )

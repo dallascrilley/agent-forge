@@ -66,6 +66,75 @@ def test_orca_backend_persists_one_run_task_dispatch_provenance(tmp_path):
     assert "--run run-1" not in " ".join(worker_start)
 
 
+def test_terminal_creation_is_exact_ready_and_reuses_its_persisted_handle(tmp_path):
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        command = " ".join(argv)
+        if "terminal create" in command:
+            return CommandResult(
+                0,
+                json.dumps({"ok": True, "result": {"terminal": {"handle": "term-scout"}}}),
+            )
+        if "terminal show" in command:
+            return CommandResult(
+                0,
+                json.dumps({"ok": True, "result": {"terminal": {"handle": "term-scout"}}}),
+            )
+        if "terminal wait" in command:
+            return CommandResult(0, json.dumps({"ok": True, "result": {"timedOut": False}}))
+        raise AssertionError(command)
+
+    ledger = RunLedger(tmp_path)
+    backend = OrcaBackend(OrcaClient(runner=runner), ledger)
+    command = "pi --no-session --tools read,grep,find,ls"
+    first = backend.ensure_terminal(
+        "run-1",
+        "repo-scout",
+        command,
+        worktree="path:/repo",
+        title="Agent Forge repo-scout run-1",
+        readiness_timeout_ms=1234,
+    )
+    second = backend.ensure_terminal(
+        "run-1",
+        "repo-scout",
+        "must-not-create",
+        worktree="path:/repo",
+        title="must-not-create",
+        readiness_timeout_ms=1234,
+    )
+    assert first == second == "term-scout"
+    assert ledger.read_backend("run-1")["identities"]["terminal:repo-scout"] == "term-scout"
+    assert sum("terminal create" in " ".join(call) for call in calls) == 1
+    create = next(call for call in calls if "terminal create" in " ".join(call))
+    assert "--worktree path:/repo" in " ".join(create)
+    assert create[create.index("--command") + 1] == command
+    waits = [call for call in calls if "terminal wait" in " ".join(call)]
+    assert len(waits) == 2
+    assert all("--for tui-idle --timeout-ms 1234" in " ".join(call) for call in waits)
+
+
+def test_terminal_readiness_timeout_retains_identity_for_recovery(tmp_path):
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        if "terminal create" in " ".join(argv):
+            return CommandResult(0, json.dumps({"ok": True, "result": {"handle": "term-timeout"}}))
+        return CommandResult(0, json.dumps({"ok": True, "result": {"timedOut": True}}))
+
+    ledger = RunLedger(tmp_path)
+    backend = OrcaBackend(OrcaClient(runner=runner), ledger)
+    with pytest.raises(OrcaError, match="did not become ready"):
+        backend.ensure_terminal(
+            "run-1", "repo-scout", "pi", worktree="path:/repo", title="scout"
+        )
+    assert ledger.read_backend("run-1")["identities"]["terminal:repo-scout"] == "term-timeout"
+    assert sum("terminal create" in " ".join(call) for call in calls) == 1
+
+
 def test_launch_without_a_valid_persisted_native_run_id_fails_before_orca_activity(tmp_path):
     ledger = RunLedger(tmp_path)
     ledger.write_backend("run-missing", "orca-pi", identities={"task:repo-scout": "task-1"})

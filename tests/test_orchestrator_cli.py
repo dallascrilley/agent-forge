@@ -47,6 +47,7 @@ def test_unknown_core_input_fields_fail_before_dispatch(tmp_path):
 
 def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_FORGE_DELEGATIONS", str(tmp_path / "delegations"))
+    monkeypatch.setattr("forge.orchestrator.cli.utc_now", lambda: "2099-01-01T00:00:00Z")
     request = copy.deepcopy(REQUEST)
     spawned = dispatch(
         {
@@ -62,6 +63,11 @@ def test_spawn_status_and_collect_use_durable_core(tmp_path, monkeypatch):
     status = dispatch({"action": "status", "runId": "run-cli"}, REPO)
     assert status["projection"]["runId"] == "run-cli"
     assert status["eventCount"] == 2
+    events = RunLedger(tmp_path / "delegations").read_events("run-cli").to_dicts()
+    assert [event["timestamp"] for event in events] == sorted(
+        event["timestamp"] for event in events
+    )
+    assert events[1]["timestamp"] == "2099-01-01T00:00:00Z"
 
     collected = dispatch(
         {"action": "collect", "runId": "run-cli", "workerId": "repo-scout"}, REPO

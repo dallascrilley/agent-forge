@@ -11,7 +11,7 @@ from typing import Any
 
 from .canonical import verify_content_identity
 from .contracts import validate_contract
-from .ledger import LedgerError, RunLedger
+from .ledger import LedgerError, RunLedger, utc_now
 from .reducer import reduce_events
 from .resolver import ResolutionError, resolve_request
 
@@ -130,7 +130,7 @@ def _spawn(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
             "runId": run_id,
             "workerId": worker_id,
             "sequence": sequence,
-            "timestamp": "2026-08-23T00:00:00Z",
+            "timestamp": utc_now(),
             "type": "worker.compiled",
             "idempotencyKey": f"{run_id}/{worker_id}/compile/1",
             "data": {},
@@ -187,7 +187,7 @@ def _cancel(value: dict[str, Any], cwd: Path) -> dict[str, Any]:
                     "runId": run_id,
                     "workerId": worker_id,
                     "sequence": sequence,
-                    "timestamp": "2026-08-23T00:00:00Z",
+                    "timestamp": utc_now(),
                     "type": event_type,
                     "idempotencyKey": f"{run_id}/{worker_id}/{status}/1",
                     "data": {"status": status},

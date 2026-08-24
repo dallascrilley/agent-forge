@@ -115,6 +115,44 @@ class OrcaClient:
             args += ("--deps", json.dumps(list(dependencies), separators=(",", ":")))
         return self._invoke(args, mutating=True).result["task"]
 
+    def terminal_create(self, command: str, *, worktree: str, title: str) -> dict[str, Any]:
+        return self._invoke(
+            (
+                "terminal",
+                "create",
+                "--worktree",
+                worktree,
+                "--title",
+                title,
+                "--command",
+                command,
+            ),
+            mutating=True,
+        ).result
+
+    def terminal_show(self, handle: str) -> dict[str, Any]:
+        return self._invoke(("terminal", "show", "--terminal", handle)).result
+
+    def terminal_wait(self, handle: str, *, timeout_ms: int = 30000) -> dict[str, Any]:
+        return self._invoke(
+            (
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                str(timeout_ms),
+            )
+        ).result
+
+    def terminal_close(self, handle: str) -> dict[str, Any]:
+        return self._invoke(
+            ("terminal", "close", "--terminal", handle, "--tab"),
+            mutating=True,
+        ).result
+
     def worker_start(self, task_id: str, *, run_id: str, terminal: str) -> dict[str, Any]:
         return self._invoke(
             (
@@ -306,6 +344,35 @@ class OrcaBackend:
             raise OrcaError("task-create returned no task id")
         self.ledger.update_backend(run_id, identities={f"task:{node_id}": task_id})
         return task_id
+
+    def ensure_terminal(
+        self,
+        run_id: str,
+        node_id: str,
+        command: str,
+        *,
+        worktree: str,
+        title: str,
+        readiness_timeout_ms: int = 30000,
+    ) -> str:
+        backend_path = self.ledger.root / run_id / "backend.json"
+        handle = None
+        if backend_path.exists():
+            existing = self.ledger.read_backend(run_id)
+            handle = existing["identities"].get(f"terminal:{node_id}")
+            if handle:
+                self.client.terminal_show(handle)
+        if handle is None:
+            result = self.client.terminal_create(command, worktree=worktree, title=title)
+            terminal = result.get("terminal", {})
+            handle = result.get("handle") or (terminal.get("handle") if isinstance(terminal, dict) else None)
+            if not isinstance(handle, str) or not handle:
+                raise OrcaError("terminal create returned no terminal handle")
+            self.ledger.update_backend(run_id, identities={f"terminal:{node_id}": handle})
+        readiness = self.client.terminal_wait(handle, timeout_ms=readiness_timeout_ms)
+        if readiness.get("timedOut") is True or readiness.get("timed_out") is True:
+            raise OrcaError(f"terminal {handle!r} did not become ready before the timeout")
+        return handle
 
     def launch(self, run_id: str, node_id: str, task_id: str, terminal: str) -> str:
         backend_path = self.ledger.root / run_id / "backend.json"

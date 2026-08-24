@@ -10,7 +10,7 @@ from .fake_backend import (
     TransientLaunchError,
     UnknownEffectError,
 )
-from .ledger import LedgerConflictError, LedgerCorruptionError, RunLedger
+from .ledger import LedgerConflictError, LedgerCorruptionError, RunLedger, utc_now
 from .orca import (
     OrcaBackend,
     OrcaClient,
@@ -22,11 +22,16 @@ from .orca import (
 from .reducer import RunState, TransitionError, WorkerState, reduce_event, reduce_events
 from .scheduler import NodeSpec, Scheduler, SchedulerError, validate_plan
 from .verticals import (
+    PiLaunchCommand,
+    RepoScoutLaunchReceipt,
     RepoScoutPlan,
     VerticalSliceError,
     assert_workspace_unchanged,
+    collect_repo_scout,
+    compile_pi_launch_command,
     compile_repo_scout,
     fake_repo_scout_result,
+    launch_repo_scout,
     snapshot_workspace,
     validate_repo_scout_result,
 )
@@ -50,6 +55,7 @@ __all__ = [
     "ResolutionError",
     "RunLedger",
     "RunState",
+    "utc_now",
     "TransitionError",
     "TransientLaunchError",
     "UnknownEffectError",
@@ -60,11 +66,16 @@ __all__ = [
     "Scheduler",
     "SchedulerError",
     "validate_plan",
+    "PiLaunchCommand",
+    "RepoScoutLaunchReceipt",
     "RepoScoutPlan",
     "VerticalSliceError",
     "assert_workspace_unchanged",
+    "collect_repo_scout",
+    "compile_pi_launch_command",
     "compile_repo_scout",
     "fake_repo_scout_result",
+    "launch_repo_scout",
     "snapshot_workspace",
     "validate_repo_scout_result",
     "resolve_request",

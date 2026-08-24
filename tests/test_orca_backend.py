@@ -12,6 +12,7 @@ from forge.orchestrator.orca import (
     CommandResult,
     OrcaBackend,
     OrcaClient,
+    OrcaError,
     OrcaObserver,
     OrcaSettlementError,
     OrcaUnknownEffect,
@@ -59,7 +60,30 @@ def test_orca_backend_persists_one_run_task_dispatch_provenance(tmp_path):
     assert sum("run-create" in " ".join(call) for call in calls) == 1
     assert sum("task-create" in " ".join(call) for call in calls) == 1
     assert sum("worker-start" in " ".join(call) for call in calls) == 1
-    assert any("--terminal term-agent" in " ".join(call) for call in calls if "worker-start" in " ".join(call))
+    worker_start = next(call for call in calls if "worker-start" in " ".join(call))
+    assert "--terminal term-agent" in " ".join(worker_start)
+    assert "--run orca-run-1" in " ".join(worker_start)
+    assert "--run run-1" not in " ".join(worker_start)
+
+
+def test_launch_without_a_valid_persisted_native_run_id_fails_before_orca_activity(tmp_path):
+    ledger = RunLedger(tmp_path)
+    ledger.write_backend("run-missing", "orca-pi", identities={"task:repo-scout": "task-1"})
+    corrupt_dir = tmp_path / "run-corrupt"
+    corrupt_dir.mkdir()
+    (corrupt_dir / "backend.json").write_text('{"bad":true}', encoding="utf-8")
+    calls = []
+
+    def runner(argv):
+        calls.append(tuple(argv))
+        raise AssertionError("launch must fail before Orca activity")
+
+    backend = OrcaBackend(OrcaClient(runner=runner), ledger)
+    with pytest.raises(OrcaError, match="no persisted native Orca Run ID"):
+        backend.launch("run-missing", "repo-scout", "task-1", "term-agent")
+    with pytest.raises(OrcaError, match="cannot read persisted Orca identities"):
+        backend.launch("run-corrupt", "repo-scout", "task-1", "term-agent")
+    assert calls == []
 
 
 def test_unknown_mutation_effect_exposes_exact_retry_receipt_without_retry():

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from .ledger import RunLedger
+from .ledger import LedgerError, RunLedger
 
 
 class OrcaError(RuntimeError):
@@ -309,13 +309,20 @@ class OrcaBackend:
 
     def launch(self, run_id: str, node_id: str, task_id: str, terminal: str) -> str:
         backend_path = self.ledger.root / run_id / "backend.json"
-        if backend_path.exists():
+        if not backend_path.exists():
+            raise OrcaError(f"no persisted Orca backend identities for run {run_id!r}")
+        try:
             existing = self.ledger.read_backend(run_id)
-            existing_id = existing["identities"].get(f"dispatch:{node_id}")
-            if existing_id:
-                self.client.worker_show(existing_id)
-                return existing_id
-        result = self.client.worker_start(task_id, run_id=run_id, terminal=terminal)
+        except LedgerError as error:
+            raise OrcaError(f"cannot read persisted Orca identities for run {run_id!r}: {error}") from error
+        existing_id = existing["identities"].get(f"dispatch:{node_id}")
+        if existing_id:
+            self.client.worker_show(existing_id)
+            return existing_id
+        native_run_id = existing["identities"].get("run")
+        if not native_run_id:
+            raise OrcaError(f"no persisted native Orca Run ID for run {run_id!r}")
+        result = self.client.worker_start(task_id, run_id=native_run_id, terminal=terminal)
         dispatch = result.get("dispatchId") or result.get("dispatch", {}).get("id")
         if not isinstance(dispatch, str) or not dispatch:
             raise OrcaError("worker-start returned no dispatch id")

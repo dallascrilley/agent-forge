@@ -20,8 +20,8 @@
 ```bash
 cd /path/to/agent-forge
 base_revision="$(git rev-parse HEAD)"
-input_file="$(mktemp -t agent-forge-web-research.XXXXXX.json)"
-delegations="$(mktemp -d -t agent-forge-web-research.XXXXXX)"
+input_file="$(mktemp -t agent-forge-web-research)"
+delegations="$(mktemp -d -t agent-forge-web-research)"
 
 cat >"$input_file" <<EOF
 {

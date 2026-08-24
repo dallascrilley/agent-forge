@@ -4,10 +4,10 @@ recipe:
   capabilities:
     required: [code.search]
     optional: []
-  resourceIds: [policy.evidence, role.repo-scout, system.worker-protocol]
+  resourceIds: [extension.worker-submit, policy.evidence, role.repo-scout, system.worker-protocol]
   permissionProfile: observe
   workspaceMode: shared-readonly
   modelTier: fast
-  tools: [read, grep, find, ls]
+  tools: [read, grep, find, ls, submit_worker_result]
   budget:
     timeoutSeconds: 600

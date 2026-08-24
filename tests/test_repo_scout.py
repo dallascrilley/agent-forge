@@ -46,7 +46,13 @@ def test_repo_scout_compiles_observe_plan_without_side_effects():
         repository_root=FIXTURES / "context",
     )
     assert plan.manifest.to_dict()["permissionProfile"] == "observe"
-    assert plan.manifest.to_dict()["tools"]["allow"] == ["read", "grep", "find", "ls"]
+    assert plan.manifest.to_dict()["tools"]["allow"] == [
+        "read",
+        "grep",
+        "find",
+        "ls",
+        "submit_worker_result",
+    ]
 
 
 def test_repo_scout_rejects_a_stale_requested_revision_before_launch():
@@ -80,7 +86,10 @@ def test_repo_scout_pi_command_uses_only_hash_locked_explicit_resources(tmp_path
     assert argv[:5] == ("pi", "--model", "openai-codex/gpt-5-mini", "--thinking", "low")
     assert "--no-extensions" in argv
     assert "--no-context-files" in argv
-    assert argv[argv.index("--tools") + 1] == "read,grep,find,ls"
+    assert argv[argv.index("--tools") + 1] == "read,grep,find,ls,submit_worker_result"
+    assert argv[argv.index("--extension") + 1] == str(
+        (REPO / "catalog/resources/worker-submit.ts").resolve()
+    )
     fragments = [argv[index + 1] for index, item in enumerate(argv) if item == "--append-system-prompt"]
     assert fragments == [
         str((REPO / "catalog/prompts/worker-protocol.md").resolve()),
@@ -191,8 +200,9 @@ def test_repo_scout_fake_launch_collect_and_restart_reconstructs_provenance(tmp_
     create = next(call for call in calls if "terminal create" in " ".join(call))
     pi_command = create[create.index("--command") + 1]
     assert "--no-context-files" in pi_command
-    assert "--tools read,grep,find,ls" in pi_command
-    assert "--tools read,grep,find,ls,bash" not in pi_command
+    assert "AGENT_FORGE_RUN_ID=run-scout-e2e" in pi_command
+    assert "--tools read,grep,find,ls,submit_worker_result" in pi_command
+    assert "--tools read,grep,find,ls,submit_worker_result,bash" not in pi_command
 
     result = collect_repo_scout(
         "run-scout-e2e",

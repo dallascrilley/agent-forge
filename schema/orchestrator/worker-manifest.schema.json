@@ -306,7 +306,8 @@
               "edit",
               "write",
               "verify",
-              "mcp-gateway"
+              "mcp-gateway",
+              "submit_worker_result"
             ]
           },
           "uniqueItems": true
@@ -385,7 +386,8 @@
                     "read",
                     "grep",
                     "find",
-                    "ls"
+                    "ls",
+                    "submit_worker_result"
                   ]
                 }
               }

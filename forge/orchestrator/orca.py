@@ -170,6 +170,38 @@ class OrcaClient:
             mutating=True,
         ).result
 
+    def worker_done(
+        self,
+        *,
+        task_id: str,
+        dispatch_id: str,
+        outcome: str,
+        subject: str,
+        body: str,
+        report_path: str,
+    ) -> dict[str, Any]:
+        return self._invoke(
+            (
+                "orchestration",
+                "send",
+                "--type",
+                "worker_done",
+                "--subject",
+                subject,
+                "--body",
+                body,
+                "--task-id",
+                task_id,
+                "--dispatch-id",
+                dispatch_id,
+                "--outcome",
+                outcome,
+                "--report-path",
+                report_path,
+            ),
+            mutating=True,
+        ).result
+
     def worker_show(self, dispatch_id: str) -> dict[str, Any]:
         return self._invoke(("orchestration", "worker-show", "--dispatch", dispatch_id)).result
 

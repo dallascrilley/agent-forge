@@ -50,7 +50,11 @@ _RESOURCE_ROOTS = {
     "recipe": {"resources"},
 }
 _PROFILE_POLICY = {
-    "observe": ("shared-readonly", 1200, {"read", "grep", "find", "ls"}),
+    "observe": (
+        "shared-readonly",
+        1200,
+        {"read", "grep", "find", "ls", "submit_worker_result"},
+    ),
     "research": (
         "shared-readonly",
         1800,

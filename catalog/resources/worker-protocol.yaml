@@ -5,7 +5,7 @@ resource:
   version: 1.0.0
   source: catalog:prompts/worker-protocol.md
   path: prompts/worker-protocol.md
-  sha256: sha256:94f29a4d5e01b63c000b5ffdef7dd5a724c4a95bacc0d7794bfd039275004845
+  sha256: sha256:b53d2c3be88339b83a0db2e1a5bf5bfa2c87942818cb72b10266bb881a9771ea
   provides: []
   requires: []
   conflicts: []

@@ -29,7 +29,19 @@ RESOURCE_KINDS = (
     "role",
     "recipe",
 )
-TOOLS = ("read", "grep", "find", "ls", "web", "bash", "edit", "write", "verify", "mcp-gateway")
+TOOLS = (
+    "read",
+    "grep",
+    "find",
+    "ls",
+    "web",
+    "bash",
+    "edit",
+    "write",
+    "verify",
+    "mcp-gateway",
+    "submit_worker_result",
+)
 RESULT_STATUSES = ("completed", "partial", "blocked", "failed")
 REVIEW_VERDICTS = ("verified", "verified-with-caveats", "refuted")
 RUN_EVENT_TYPES = (
@@ -319,7 +331,11 @@ _WORKER_MANIFEST = _object(
 )
 
 _PROFILE_POLICY = {
-    "observe": ("shared-readonly", 1200, ("read", "grep", "find", "ls")),
+    "observe": (
+        "shared-readonly",
+        1200,
+        ("read", "grep", "find", "ls", "submit_worker_result"),
+    ),
     "research": ("shared-readonly", 1800, ("read", "grep", "find", "ls", "web", "mcp-gateway")),
     "modify-isolated": ("isolated-worktree", 3600, ("read", "grep", "find", "ls", "bash", "edit", "write", "verify")),
     "review": ("isolated-readonly", 900, ("read", "grep", "find", "ls", "verify")),

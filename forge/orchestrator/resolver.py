@@ -21,7 +21,10 @@ from .contracts import (
 _ZERO_HASH = "sha256:" + "0" * 64
 _COST = {"low": 0, "medium": 1, "high": 2}
 _PROFILE_POLICY = {
-    "observe": ("shared-readonly", {"read", "grep", "find", "ls"}),
+    "observe": (
+        "shared-readonly",
+        {"read", "grep", "find", "ls", "submit_worker_result"},
+    ),
     "research": (
         "shared-readonly",
         {"read", "grep", "find", "ls", "web", "mcp-gateway"},

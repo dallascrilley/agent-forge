@@ -43,6 +43,13 @@ class PiLaunchCommand:
     def shell(self) -> str:
         return shlex.join(self.argv)
 
+    def shell_with_environment(self, values: dict[str, str]) -> str:
+        for name, value in values.items():
+            if not name.startswith("AGENT_FORGE_") or "\0" in value:
+                raise VerticalSliceError("invalid worker launch environment")
+        assignments = [f"{name}={values[name]}" for name in sorted(values)]
+        return shlex.join(("env", *assignments, *self.argv))
+
 
 @dataclass(frozen=True)
 class RepoScoutLaunchReceipt:
@@ -207,11 +214,13 @@ def launch_repo_scout(
         catalog_root=catalog_root,
         repository_root=repository_root,
     )
+    report_path = (ledger.root / run_id / "results" / f"{worker_id}.json").resolve()
     ledger.update_backend(
         run_id,
         identities={
             f"workspace-revision:{worker_id}": workspace_now.revision,
             f"workspace-status:{worker_id}": _status_digest(workspace_now.status),
+            f"report:{worker_id}": str(report_path),
         },
     )
     for event_type, status in (
@@ -239,7 +248,13 @@ def launch_repo_scout(
     terminal = backend.ensure_terminal(
         run_id,
         worker_id,
-        command.shell,
+        command.shell_with_environment(
+            {
+                "AGENT_FORGE_DELEGATIONS": str(ledger.root.resolve()),
+                "AGENT_FORGE_RUN_ID": run_id,
+                "AGENT_FORGE_WORKER_ID": worker_id,
+            }
+        ),
         worktree=f"path:{Path(repository_root).resolve()}",
         title=f"Agent Forge {worker_id} {run_id}",
     )

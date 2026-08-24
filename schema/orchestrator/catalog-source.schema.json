@@ -195,7 +195,8 @@
                 "edit",
                 "write",
                 "verify",
-                "mcp-gateway"
+                "mcp-gateway",
+                "submit_worker_result"
               ]
             },
             "uniqueItems": true
@@ -304,7 +305,8 @@
                 "edit",
                 "write",
                 "verify",
-                "mcp-gateway"
+                "mcp-gateway",
+                "submit_worker_result"
               ]
             },
             "uniqueItems": true

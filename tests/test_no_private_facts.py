@@ -14,6 +14,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parent.parent
 
 FORBIDDEN = [
@@ -35,13 +37,16 @@ TEXT_NAMES = {"LICENSE", ".gitignore"}
 
 def iter_text_files():
     """Text files git would publish: tracked, plus untracked and not ignored."""
-    listed = subprocess.run(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=REPO,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        pytest.skip(f"cannot enumerate published files without git: {exc}")
     self_path = Path(__file__).resolve()
     for rel in listed.split("\0"):
         if not rel:

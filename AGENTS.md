@@ -91,9 +91,6 @@ emits an `async def graph()` factory instead of a module-level graph, builds a
 | `docs/` | `spec-v1.md` (field reference), `adapters.md` (adapter on-ramp), `plans/` |
 | `.beads/` | Beads issue tracker state (embedded Dolt). Never commit `.beads/embeddeddolt/`, `.beads/dolt/`, or `.beads/redirect` |
 
-`forge/orchestrator/` is an **empty, unreferenced directory** — not part of the
-architecture.
-
 ## Development Commands
 
 Generator (no install step — stdlib only; run from the repo root):
@@ -168,8 +165,10 @@ board, GitHub Issues is public intake.
 - **Formatting/lint** — `ruff.toml`: `target-version = "py310"`,
   `extend-exclude = ["tests/golden"]`, `[lint] select = ["E4", "E7", "E9", "F"]`.
   No formatter, import-sorter, or type checker is configured.
-- **Python style** — `from __future__ import annotations` in every module;
-  builtin generics (`list[str]`, `str | None`); light annotations; `@dataclass`
+- **Python style** — `from __future__ import annotations` in annotated modules
+  (the generator modules and most tests; several tiny constants-only files such
+  as `forge/__init__.py` and `forge/errors.py` omit it); builtin generics
+  (`list[str]`, `str | None`); light annotations; `@dataclass`
   for the `Spec` IR. No `ABC`/`Protocol` for adapters — the contract is
   duck-typed `generate(spec, out_dir)`.
 - **Naming** — `snake_case` modules and functions, `_leading_underscore` for

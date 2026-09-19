@@ -1,11 +1,17 @@
 """R5: no private facts in the public repo.
 
-Scans every tracked text file for markers of the author's private fleet,
-credential, or state machinery. The GitHub *owner name in repo URLs* is fine
-(the repo is public by design); local machine state and private tooling are not.
+Scans every text file git would publish — tracked, plus untracked-but-not-ignored
+— for markers of the author's private fleet, credential, or state machinery. The
+GitHub *owner name in repo URLs* is fine (the repo is public by design); local
+machine state and private tooling are not.
+
+Ignored paths are deliberately out of scope: they never reach the public repo,
+so scanning them yields only false positives (the local fleet state dir, the
+embedded issue database, and caches all legitimately hold absolute paths).
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -28,16 +34,25 @@ TEXT_NAMES = {"LICENSE", ".gitignore"}
 
 
 def iter_text_files():
+    """Text files git would publish: tracked, plus untracked and not ignored."""
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     self_path = Path(__file__).resolve()
-    for p in sorted(REPO.rglob("*")):
-        if not p.is_file():
+    for rel in listed.split("\0"):
+        if not rel:
             continue
-        if p.resolve() == self_path:
+        path = REPO / rel
+        if path.resolve() == self_path:
             continue  # this file literally contains the forbidden patterns
-        if any(part in {".git", ".venv", "__pycache__"} for part in p.parts):
+        if not path.is_file():
             continue
-        if p.suffix in TEXT_SUFFIXES or p.name in TEXT_NAMES:
-            yield p
+        if path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES:
+            yield path
 
 
 def test_no_private_facts():
